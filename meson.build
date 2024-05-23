@@ -145,6 +145,7 @@ default_drivers = [
     'fpcmoc',
     'realtek',
     'focaltech_moc',
+    'mafpmoc',
     'secugen',
 ]
 
