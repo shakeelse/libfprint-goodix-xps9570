@@ -259,7 +259,7 @@ fp_cmd_receive_cb (FpiUsbTransfer *transfer,
           g_clear_error (&error);
           return;
         }
-      fpi_ssm_mark_failed (transfer->ssm, error);
+      fpi_ssm_mark_failed (transfer->ssm, g_steal_pointer (&error));
       return;
     }
   if (data == NULL)
@@ -554,7 +554,7 @@ fp_init_handeshake_cb (FpiDeviceMafpmoc    *self,
   if (error)
     {
       fp_dbg ("handshake fail");
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -665,7 +665,7 @@ fp_init_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
   if (error)
     {
       fp_dbg ("%d %s", error->code, error->message);
-      fpi_device_open_complete (dev, error);
+      fpi_device_open_complete (dev, g_steal_pointer (&error));
       return;
     }
   self->task_ssm = NULL;
@@ -681,7 +681,7 @@ fp_enroll_tpl_table_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -722,7 +722,7 @@ fp_enroll_read_tpl_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -762,7 +762,7 @@ fp_enroll_get_image_cb (FpiDeviceMafpmoc    *self,
     g_cancellable_set_error_if_cancelled (fpi_device_get_cancellable (dev), &error);
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
 
@@ -809,7 +809,7 @@ fp_enroll_verify_search_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -841,7 +841,7 @@ fp_enroll_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d, %s", resp->result, resp->tpl_info.uid);
@@ -905,7 +905,7 @@ fp_enroll_gen_feature_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -930,7 +930,7 @@ fp_enroll_verify_duparea_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -949,7 +949,7 @@ fp_enroll_save_tpl_info_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -986,7 +986,7 @@ fp_enroll_save_tpl_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -1027,7 +1027,7 @@ fp_enroll_del_tpl_info_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -1042,7 +1042,7 @@ mafp_sleep_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fpi_ssm_next_state (self->task_ssm);
@@ -1058,7 +1058,7 @@ mafp_pwr_btn_shield_off_cb (FpiUsbTransfer *transfer,
 
   if (error)
     {
-      fpi_ssm_mark_failed (transfer->ssm, error);
+      fpi_ssm_mark_failed (transfer->ssm, g_steal_pointer (&error));
       return;
     }
   uint8_t para = 0;
@@ -1074,7 +1074,7 @@ mafp_pwr_btn_shield_on_cb (FpiUsbTransfer *transfer,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (transfer->ssm, error);
+      fpi_ssm_mark_failed (transfer->ssm, g_steal_pointer (&error));
       return;
     }
   fpi_ssm_next_state (transfer->ssm);
@@ -1104,7 +1104,7 @@ fp_enroll_int_check_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fpi_ssm_next_state (self->task_ssm);
@@ -1117,7 +1117,7 @@ fp_enroll_int_detect_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fpi_ssm_next_state (self->task_ssm);
@@ -1130,7 +1130,7 @@ fp_enroll_int_refresh_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   self->capture_cnt = 0;
@@ -1145,7 +1145,7 @@ fp_enroll_enable_int_cb (FpiUsbTransfer *transfer,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (transfer->ssm, error);
+      fpi_ssm_mark_failed (transfer->ssm, g_steal_pointer (&error));
       return;
     }
   fpi_ssm_next_state (transfer->ssm);
@@ -1159,7 +1159,7 @@ fp_enroll_disable_int_cb (FpiUsbTransfer *transfer,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (transfer->ssm, error);
+      fpi_ssm_mark_failed (transfer->ssm, g_steal_pointer (&error));
       return;
     }
   fpi_ssm_jump_to_state (transfer->ssm, FP_ENROLL_VERIFY_GET_IMAGE);
@@ -1376,7 +1376,7 @@ fp_verify_tpl_table_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -1398,7 +1398,7 @@ fp_verify_get_image_cb (FpiDeviceMafpmoc    *self,
     g_cancellable_set_error_if_cancelled (fpi_device_get_cancellable (dev), &error);
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   FpVerifyState nextState = FP_VERIFY_GET_IMAGE;
@@ -1445,7 +1445,7 @@ fp_verify_gen_feature_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -1489,7 +1489,7 @@ fp_verify_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
     g_cancellable_set_error_if_cancelled (fpi_device_get_cancellable (dev), &error);
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -1546,7 +1546,7 @@ fp_verify_search_step_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -1610,7 +1610,7 @@ fp_verify_int_check_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fpi_ssm_next_state (self->task_ssm);
@@ -1623,7 +1623,7 @@ fp_verify_int_detect_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fpi_ssm_next_state (self->task_ssm);
@@ -1636,7 +1636,7 @@ fp_verify_int_refresh_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   self->capture_cnt = 0;
@@ -1651,7 +1651,7 @@ fp_verify_enable_int_cb (FpiUsbTransfer *transfer,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (transfer->ssm, error);
+      fpi_ssm_mark_failed (transfer->ssm, g_steal_pointer (&error));
       return;
     }
   fpi_ssm_next_state (transfer->ssm);
@@ -1665,7 +1665,7 @@ fp_verify_disable_int_cb (FpiUsbTransfer *transfer,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (transfer->ssm, error);
+      fpi_ssm_mark_failed (transfer->ssm, g_steal_pointer (&error));
       return;
     }
   fpi_ssm_jump_to_state (transfer->ssm, FP_VERIFY_GET_IMAGE);
@@ -1867,7 +1867,7 @@ fp_list_tpl_table_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_device_list_complete (dev, NULL, error);
+      fpi_device_list_complete (dev, NULL, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -1899,7 +1899,7 @@ fp_list_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
 {
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -1951,7 +1951,7 @@ fp_list_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
   if (error)
     {
       fp_dbg ("list tpl fail");
-      fpi_device_list_complete (dev, NULL, error);
+      fpi_device_list_complete (dev, NULL, g_steal_pointer (&error));
       return;
     }
   fpi_device_list_complete (FP_DEVICE (self), g_steal_pointer (&self->templates->list), NULL);
@@ -1969,7 +1969,7 @@ fp_delete_tpl_table_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -2006,7 +2006,7 @@ fp_delete_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -2047,7 +2047,7 @@ fp_delete_clear_tpl_info_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -2070,7 +2070,7 @@ fp_delete_tpl_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -2148,7 +2148,7 @@ fp_delete_all_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("result: %d", resp->result);
@@ -2183,7 +2183,7 @@ fp_delete_all_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
   if (error)
     {
       fp_dbg ("delete all fail");
-      fpi_device_clear_storage_complete (dev, error);
+      fpi_device_clear_storage_complete (dev, g_steal_pointer (&error));
       return;
     }
   fp_dbg ("delete all success");
@@ -2259,7 +2259,7 @@ mafp_probe (FpDevice *device)
 
 err_close:
   g_usb_device_close (usb_dev, NULL);
-  fpi_device_probe_complete (device, NULL, NULL, error);
+  fpi_device_probe_complete (device, NULL, NULL, g_steal_pointer (&error));
 }
 
 static void
