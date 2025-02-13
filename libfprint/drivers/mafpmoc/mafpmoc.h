@@ -97,8 +97,6 @@ G_DECLARE_FINAL_TYPE (FpiDeviceMafpmoc, fpi_device_mafpmoc, FPI, DEVICE_MAFPMOC,
 
 #define MAFP_IMAGE_ERR_TRRIGER 30
 
-#define FPRINT_DATA_PATH "/var/lib/fprint/"
-
 typedef enum {
   FP_CMD_SEND = 0,
   FP_CMD_RECEIVE,

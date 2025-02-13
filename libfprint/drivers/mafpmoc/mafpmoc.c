@@ -1205,84 +1205,19 @@ fp_enroll_wait_int (FpiDeviceMafpmoc *self)
                            NULL);
 }
 
-static int
-load_fp_data (FpDevice *dev)
-{
-  const char *filename = NULL;
-  gboolean fp_exist = false;
-  GDir *dir = g_dir_open (FPRINT_DATA_PATH, 0, NULL);
-
-  if (dir == NULL)
-    {
-      if (g_file_test (FPRINT_DATA_PATH, G_FILE_TEST_EXISTS))
-        {
-          fp_dbg ("open dir %s failed", FPRINT_DATA_PATH);
-          return 1;
-        }
-      fp_dbg ("dir %s not exsit", FPRINT_DATA_PATH);
-      return 0;
-    }
-  while (NULL != (filename = g_dir_read_name (dir)))
-    {
-      g_autofree char *user_path = g_strconcat (FPRINT_DATA_PATH, filename, NULL);
-      if (g_file_test (user_path, G_FILE_TEST_IS_DIR))
-        {
-          FpDeviceClass *cls = FP_DEVICE_GET_CLASS (dev);
-          g_autofree char *module_path = g_strconcat (user_path, "/", cls->id, NULL);
-          fp_dbg ("found data path: %s", module_path);
-          if (g_file_test (module_path, G_FILE_TEST_IS_DIR))
-            {
-              fp_exist = true;
-              break;
-            }
-        }
-    }
-  if (!fp_exist)
-    return 0;
-
-  g_dir_close (dir);
-  return 1;
-}
-
 static void
 fp_empty_cb (FpiDeviceMafpmoc    *self,
              mafp_cmd_response_t *resp,
              GError              *error)
 {
-  fp_dbg ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp ? resp->result : -1);
   fpi_ssm_next_state (self->task_ssm);
 }
 
-static int
+static void
 mafp_check_empty (FpiDeviceMafpmoc *self)
 {
-  FpDevice *dev = FP_DEVICE (self);
-  struct utsname sysinfo;
-
-  if (uname (&sysinfo) == -1)
-    {
-      fp_dbg ("sysinfo err");
-      fpi_ssm_next_state (self->task_ssm);
-      return 0;
-    }
-  const char * str_ubuntu = "ubuntu";
-  GString *version = g_string_new (sysinfo.version);
-  char *sys_ver = g_string_ascii_down (version)->str;
-
-  fp_dbg ("check system: %s", g_strrstr (sys_ver, str_ubuntu) ? "ubuntu" : "other");
-  gboolean empty = (g_strrstr (sys_ver, str_ubuntu) && !load_fp_data (dev));
-
-  g_string_free (version, TRUE);
-
-  if (empty)
-    {
-      fp_dbg ("empty fp");
-      mafp_sensor_cmd (self, MOC_CMD_EMPTY, NULL, 0, fp_empty_cb);
-      return 1;
-    }
-  fp_dbg ("check fp end");
-  fpi_ssm_next_state (self->task_ssm);
-  return 0;
+  mafp_sensor_cmd (self, MOC_CMD_EMPTY, NULL, 0, fp_empty_cb);
 }
 
 static void
