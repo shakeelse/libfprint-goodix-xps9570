@@ -1875,9 +1875,7 @@ fp_list_tpl_table_cb (FpiDeviceMafpmoc    *self,
   if (resp->result == MAFP_SUCCESS)
     {
       mafp_load_enrolled_ids (self, resp);
-      if (self->templates->list)
-        g_clear_pointer (&self->templates->list, g_object_unref);
-      self->templates->list = g_ptr_array_new_with_free_func (g_object_unref);
+
       if (self->templates->total_num == 0)
         {
           fpi_ssm_jump_to_state (self->task_ssm, FP_LIST_STATES);
@@ -1951,6 +1949,7 @@ fp_list_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
   if (error)
     {
       fp_dbg ("list tpl fail");
+      g_clear_pointer (&self->templates->list, g_ptr_array_unref);
       fpi_device_list_complete (dev, NULL, g_steal_pointer (&error));
       return;
     }
@@ -2351,6 +2350,8 @@ mafp_template_list (FpDevice *device)
   FpiDeviceMafpmoc *self = FPI_DEVICE_MAFPMOC (device);
 
   memset (self->templates, 0, sizeof (mafp_templates_t));
+  self->templates->list = g_ptr_array_new_with_free_func (g_object_unref);
+
   self->task_ssm = fpi_ssm_new (device, fp_list_run_state, FP_LIST_STATES);
   if (!PRINT_SSM_DEBUG)
     fpi_ssm_silence_debug (self->task_ssm);
