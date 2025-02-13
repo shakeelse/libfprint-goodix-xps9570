@@ -222,6 +222,7 @@ typedef struct _mafp_template
   uint16_t id;
   char     uid[128];
 } mafp_template_t, *pmafp_template_t;
+#pragma pack(pop)
 
 typedef struct _mafp_templates
 {
@@ -232,7 +233,6 @@ typedef struct _mafp_templates
   mafp_template_t priv_list[MAX_FINGER_NUM];
   GPtrArray      *list;
 } mafp_templates_t, *pmafp_templates_t;
-#pragma pack(pop)
 
 typedef struct _fp_cmd_response
 {
