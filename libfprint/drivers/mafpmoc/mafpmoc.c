@@ -405,13 +405,13 @@ alloc_cmd_transfer (FpiDeviceMafpmoc *self,
                     const uint8_t    *data,
                     uint32_t          data_len)
 {
-  g_return_val_if_fail (data || data_len == 0, NULL);
-  FpDevice *dev = FP_DEVICE (self);
-
-  g_autoptr(FpiUsbTransfer) transfer = fpi_usb_transfer_new (dev);
+  g_autoptr(FpiUsbTransfer) transfer = fpi_usb_transfer_new (FP_DEVICE (self));
   uint32_t total_len = PACKAGE_HEADER_SIZE + cmd_len + data_len + PACKAGE_CRC_SIZE;
-  uint8_t *buffer = ma_protocol_build_package (total_len, cmd, cmd_len, data, data_len);
+  uint8_t *buffer;
 
+  g_return_val_if_fail (data || data_len == 0, NULL);
+
+  buffer = ma_protocol_build_package (total_len, cmd, cmd_len, data, data_len);
   fpi_usb_transfer_fill_bulk_full (transfer, MAFP_EP_BULK_OUT, buffer, total_len, g_free);
   return g_steal_pointer (&transfer);
 }
@@ -424,7 +424,6 @@ mafp_sensor_cmd (FpiDeviceMafpmoc *self,
                  SynCmdMsgCallback callback)
 {
   g_autoptr(FpiUsbTransfer) transfer = alloc_cmd_transfer (self, cmd, 1, data, data_len);
-
   CommandData *cmd_data = g_new0 (CommandData, 1);
 
   cmd_data->cmd = cmd;
@@ -465,11 +464,10 @@ mafp_sensor_control (FpiDeviceMafpmoc      *self,
 static mafp_template_t
 mafp_template_from_print (FpPrint *print)
 {
-  const uint16_t tpl_id = 0;
-
   g_autoptr(GVariant) data = NULL;
   g_autoptr(GVariant) tpl_uid = NULL;
   g_autoptr(GVariant) dev_sn = NULL;
+  const uint16_t tpl_id = 0;
   const char *user_id;
   const char *serial_num;
   gsize user_id_len = 0;
@@ -679,6 +677,7 @@ fp_enroll_tpl_table_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
@@ -720,6 +719,7 @@ fp_enroll_read_tpl_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   uint8_t *resp_buff = (uint8_t *) resp;
@@ -814,6 +814,7 @@ fp_enroll_verify_search_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
@@ -838,6 +839,7 @@ fp_enroll_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
                            GError              *error)
 {
   FpDevice *dev = FP_DEVICE (self);
+  g_autofree char *uid = NULL;
 
   if (error)
     {
@@ -912,6 +914,7 @@ fp_enroll_gen_feature_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (self->enroll_dupl_area_state == MAFP_ENROLL_DUPLICATE_AREA_DENY)
@@ -939,6 +942,7 @@ fp_enroll_verify_duparea_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result != MAFP_SUCCESS)
@@ -958,6 +962,7 @@ fp_enroll_save_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_RE_TPL_NUM_OVERSIZE)
@@ -995,6 +1000,7 @@ fp_enroll_save_tpl_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
@@ -1036,6 +1042,7 @@ fp_enroll_del_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
   mafp_mark_failed (dev, self->task_ssm, FP_DEVICE_ERROR_GENERAL,
                     "Failed to save template, result: 0x%x", resp->result);
@@ -1097,6 +1104,7 @@ mafp_pwr_btn_shield_on (FpiDeviceMafpmoc *self, int on)
       fpi_ssm_next_state (self->task_ssm);
       return;
     }
+
   if (on)
     mafp_sensor_control (self, 0x8B, 0x01, mafp_pwr_btn_shield_on_cb, NULL, 1000);
   else
@@ -1386,6 +1394,7 @@ fp_verify_tpl_table_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
@@ -1463,6 +1472,7 @@ fp_verify_gen_feature_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
@@ -1575,6 +1585,7 @@ fp_verify_search_step_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
   if (resp->result == MAFP_SUCCESS)
     {
@@ -1909,6 +1920,7 @@ fp_list_tpl_table_cb (FpiDeviceMafpmoc    *self,
       fpi_device_list_complete (dev, NULL, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
@@ -1939,6 +1951,7 @@ fp_list_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
@@ -2017,6 +2030,7 @@ fp_delete_tpl_table_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
@@ -2055,6 +2069,7 @@ fp_delete_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
@@ -2096,6 +2111,7 @@ fp_delete_clear_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result != MAFP_SUCCESS)
@@ -2119,6 +2135,7 @@ fp_delete_tpl_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result != MAFP_SUCCESS)
@@ -2196,6 +2213,7 @@ fp_delete_all_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
+
   fp_dbg ("result: %d", resp->result);
 
   if (resp->result != MAFP_SUCCESS)
@@ -2337,6 +2355,7 @@ mafp_init (FpDevice *device)
 
   self->templates = g_new0 (mafp_templates_t, 1);
   self->task_ssm = fpi_ssm_new (device, fp_init_run_state, FP_INIT_STATES);
+
   if (!PRINT_SSM_DEBUG)
     fpi_ssm_silence_debug (self->task_ssm);
   fpi_ssm_start (self->task_ssm, fp_init_ssm_done);
@@ -2434,10 +2453,10 @@ static void
 mafp_release_interface (FpiDeviceMafpmoc *self,
                         GError           *error)
 {
+  g_autoptr(GError) release_error = NULL;
   g_free (self->serial_number);
   g_free (self->enroll_user_id);
 
-  g_autoptr(GError) release_error = NULL;
   /* Release usb interface */
   g_usb_device_release_interface (fpi_device_get_usb_device (FP_DEVICE (self)),
                                   0, 0, &release_error);
