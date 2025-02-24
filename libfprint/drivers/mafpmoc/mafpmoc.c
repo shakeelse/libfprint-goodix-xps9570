@@ -13,7 +13,6 @@ struct _FpiDeviceMafpmoc
   gboolean          cmd_cancelable;
   gboolean          cmd_force_pass;
   int               enroll_stage;
-  int               max_enroll_stage;
   int               max_stored_prints;
   uint8_t           interface_num;
   uint8_t           press_state;
@@ -558,26 +557,19 @@ fp_init_handeshake_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, g_steal_pointer (&error));
       return;
     }
-  fp_dbg ("result: %d", resp->result);
+
+  fp_dbg ("result: %d, handshake code %s", resp->result, resp->handshake.code);
 
   if (resp->result == MAFP_SUCCESS &&
       resp->handshake.code[0] == MAFP_HANDSHAKE_CODE1 &&
       resp->handshake.code[1] == MAFP_HANDSHAKE_CODE2)
     {
-      self->max_enroll_stage = DEFAULT_ENROLL_SAMPLES;
-      char * value = getenv (MAFP_ENV_ENROLL_SAMPLES);
-      if (value)
-        self->max_enroll_stage = g_ascii_strtoll (value, NULL, 10);
-      fp_dbg ("max_enroll_stage: %d", self->max_enroll_stage);
-      fpi_device_set_nr_enroll_stages (dev, self->max_enroll_stage);
-
       fpi_ssm_next_state (self->task_ssm);
+      return;
     }
-  else
-    {
-      mafp_mark_failed (dev, self->task_ssm, FP_DEVICE_ERROR_GENERAL,
-                        "Failed to handshake, result: 0x%x", resp->result);
-    }
+
+  mafp_mark_failed (dev, self->task_ssm, FP_DEVICE_ERROR_GENERAL,
+                    "Failed to handshake, result: 0x%x", resp->result);
 }
 
 static void
@@ -833,7 +825,7 @@ fp_enroll_verify_search_cb (FpiDeviceMafpmoc    *self,
   else
     {
       self->search_id = G_MAXUINT16;
-      if (self->enroll_stage >= self->max_enroll_stage)
+      if (self->enroll_stage >= fp_device_get_nr_enroll_stages (FP_DEVICE (self)))
         fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_SAVE_TEMPLATE_INFO);
       else
         fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_VERIFY_GET_IMAGE);
@@ -871,7 +863,7 @@ fp_enroll_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
           return;
         }
     }
-  if (self->enroll_stage >= self->max_enroll_stage)
+  if (self->enroll_stage >= fp_device_get_nr_enroll_stages (FP_DEVICE (self)))
     fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_SAVE_TEMPLATE_INFO);
   else
     fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_VERIFY_GET_IMAGE);
@@ -891,7 +883,7 @@ fp_enroll_once_complete_cb (FpiDeviceMafpmoc    *self,
 
       if (self->enroll_identify_state == MAFP_ENROLL_IDENTIFY_DISABLED)
         {
-          if (self->enroll_stage >= self->max_enroll_stage)
+          if (self->enroll_stage >= fp_device_get_nr_enroll_stages (FP_DEVICE (self)))
             fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_SAVE_TEMPLATE_INFO);
           else
             fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_VERIFY_GET_IMAGE);
@@ -924,7 +916,9 @@ fp_enroll_gen_feature_cb (FpiDeviceMafpmoc    *self,
 
   if (self->enroll_dupl_area_state == MAFP_ENROLL_DUPLICATE_AREA_DENY)
     {
-      int remain_stage = self->max_enroll_stage - self->enroll_stage;
+      int device_stages = fp_device_get_nr_enroll_stages (FP_DEVICE (self));
+      int remain_stage = device_stages - self->enroll_stage;
+
       /* check duplicate area in last 3 times */
       if (remain_stage > 0 && remain_stage <= 3)
         {
@@ -2301,8 +2295,6 @@ mafp_probe (FpDevice *device)
   memcpy (self->serial_number, serial, strlen (serial));
   fp_dbg ("serial: %s", serial);
 
-  fpi_device_set_nr_enroll_stages (device, DEFAULT_ENROLL_SAMPLES);
-
   g_usb_device_close (usb_dev, NULL);
   fpi_device_probe_complete (device, serial, NULL, NULL);
   return;
@@ -2480,6 +2472,7 @@ static void
 fpi_device_mafpmoc_class_init (FpiDeviceMafpmocClass *klass)
 {
   FpDeviceClass *dev_class = FP_DEVICE_CLASS (klass);
+  const char *env_enroll_samples;
 
   dev_class->id = "mafpmoc";
   dev_class->full_name = "MAFP MOC Fingerprint Sensor";
@@ -2499,6 +2492,15 @@ fpi_device_mafpmoc_class_init (FpiDeviceMafpmocClass *klass)
   dev_class->delete = mafp_template_delete;
   dev_class->clear_storage = mafp_template_delete_all;
   dev_class->list = mafp_template_list;
+
+  env_enroll_samples = getenv (MAFP_ENV_ENROLL_SAMPLES);
+  if (env_enroll_samples)
+    {
+      guint64 max_enroll_stage = g_ascii_strtoll (env_enroll_samples, NULL, 10);
+
+      if (max_enroll_stage > 0 && max_enroll_stage <= 30)
+        dev_class->nr_enroll_stages = max_enroll_stage;
+    }
 
   fpi_device_class_auto_initialize_features (dev_class);
 }
