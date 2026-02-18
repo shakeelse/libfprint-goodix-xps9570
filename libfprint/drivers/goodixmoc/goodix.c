@@ -481,6 +481,35 @@ fp_verify_cb (FpiDeviceGoodixMoc  *self,
 }
 
 static void
+fp_verify_finger_mode_cb (FpiDeviceGoodixMoc  *self,
+                          gxfp_cmd_response_t *resp,
+                          GError              *error)
+{
+  if (error)
+    {
+      fpi_ssm_mark_failed (self->task_ssm, error);
+      return;
+    }
+  /* if reach max timeout(5sec) finger not up, try again */
+  if (resp->finger_status.status == GX_ERROR_WAIT_FINGER_UP_TIMEOUT)
+    {
+      fpi_ssm_jump_to_state (self->task_ssm, GOODIX_VERIFY_WAIT_FINGER_UP);
+      return;
+    }
+  else if (resp->finger_status.status != GX_SUCCESS)
+    {
+      fpi_ssm_mark_failed (self->task_ssm,
+                           fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                     "Switch finger mode failed"));
+      return;
+    }
+  fpi_device_report_finger_status_changes (FP_DEVICE (self),
+                                           FP_FINGER_STATUS_NONE,
+                                           FP_FINGER_STATUS_PRESENT);
+  fpi_ssm_next_state (self->task_ssm);
+}
+
+static void
 fp_verify_sm_run_state (FpiSsm *ssm, FpDevice *device)
 {
   FpiDeviceGoodixMoc *self = FPI_DEVICE_GOODIXMOC (device);
@@ -518,6 +547,17 @@ fp_verify_sm_run_state (FpiSsm *ssm, FpDevice *device)
                          (const guint8 *) nonce,
                          TEMPLATE_ID_SIZE,
                          fp_verify_cb);
+      break;
+
+    case GOODIX_VERIFY_WAIT_FINGER_UP:
+      {
+        guint8 dummy = 0;
+        goodix_sensor_cmd (self, MOC_CMD0_FINGER_MODE, MOC_CMD1_SET_FINGER_UP,
+                           true,
+                           &dummy,
+                           1,
+                           fp_verify_finger_mode_cb);
+      }
       break;
 
     case GOODIX_VERIFY_PWR_BTN_SHIELD_OFF:
