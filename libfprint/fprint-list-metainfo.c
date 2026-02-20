@@ -78,6 +78,8 @@ main (void)
   g_autoptr(GString) provided_modules = g_string_new (NULL);
   g_autoptr(GError) error = NULL;
 
+  g_log_writer_default_set_use_stderr (TRUE);
+
   g_array_sort (drivers, driver_compare);
 
   for (guint i = 0; i < drivers->len; ++i)
