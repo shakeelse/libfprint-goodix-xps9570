@@ -282,6 +282,7 @@ fpi_device_get_current_action
 fpi_device_retry_new
 fpi_device_error_new
 fpi_device_retry_new_msg
+fpi_device_emulation_mode_enabled
 fpi_device_error_new_msg
 fpi_device_get_driver_data
 fpi_device_get_enroll_data

@@ -2317,7 +2317,7 @@ mafp_probe (FpDevice *device)
   if (!g_usb_device_claim_interface (usb_dev, self->interface_num, 0, &error))
     goto err_close;
 
-  if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
+  if (fpi_device_emulation_mode_enabled (device))
     {
       serial = g_strdup ("emulated-device");
     }
@@ -2378,7 +2378,7 @@ mafp_init (FpDevice *device)
   else
     fp_dbg ("device no storage");
 
-  if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
+  if (fpi_device_emulation_mode_enabled (device))
     {
       serial = g_strdup ("emulated-device");
     }

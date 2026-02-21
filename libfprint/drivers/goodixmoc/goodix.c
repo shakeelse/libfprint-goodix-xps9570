@@ -970,7 +970,7 @@ fp_enroll_sm_run_state (FpiSsm *ssm, FpDevice *device)
         user_id_len = MIN (100, user_id_len);
         finger = 1;
 
-        if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
+        if (fpi_device_emulation_mode_enabled (FP_DEVICE (self)))
           memset (self->template_id, 0, TEMPLATE_ID_SIZE);
         uid = g_variant_new_fixed_array (G_VARIANT_TYPE_BYTE,
                                          user_id,
@@ -1390,7 +1390,7 @@ gx_fp_probe (FpDevice *device)
   if (!g_usb_device_claim_interface (usb_dev, 0, 0, &error))
     goto err_close;
 
-  if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
+  if (fpi_device_emulation_mode_enabled (FP_DEVICE (self)))
     {
 
       serial = g_strdup ("emulated-device");

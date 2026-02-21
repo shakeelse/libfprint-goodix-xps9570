@@ -1380,7 +1380,7 @@ dev_init (FpImageDevice *dev)
 
   g_clear_pointer (&self->rand, g_rand_free);
   self->rand = g_rand_new ();
-  if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
+  if (fpi_device_emulation_mode_enabled (FP_DEVICE (dev)))
     g_rand_set_seed (self->rand, 0xFACADE);
 
   driver_data = fpi_device_get_driver_data (FP_DEVICE (dev));

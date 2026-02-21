@@ -557,7 +557,7 @@ capture_run_state (FpiSsm *ssm, FpDevice *dev)
       else
         {
           /* XXX: The timeout is emulated incorrectly, resulting in a zero byte read. */
-          if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
+          if (fpi_device_emulation_mode_enabled (FP_DEVICE (self)))
             fpi_ssm_mark_completed (ssm);
           else
             fpi_ssm_mark_failed (ssm, fpi_device_error_new (FP_DEVICE_ERROR_PROTO));

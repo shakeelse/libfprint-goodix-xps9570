@@ -1211,7 +1211,7 @@ prob_msg_cb (FpiDeviceSynaptics *self,
       return;
     }
 
-  if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
+  if (fpi_device_emulation_mode_enabled (FP_DEVICE (self)))
     serial = g_strdup ("emulated-device");
   else
     serial = g_usb_device_get_string_descriptor (usb_dev,

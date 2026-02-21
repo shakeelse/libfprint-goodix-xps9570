@@ -332,4 +332,11 @@ gboolean fpi_device_report_finger_status_changes (FpDevice           *device,
                                                   FpFingerStatusFlags added_status,
                                                   FpFingerStatusFlags removed_status);
 
+/* Debugging utilities */
+
+#define fpi_device_emulation_mode_enabled(dev) \
+  G_UNLIKELY ((fpi_device_emulation_mode_enabled) ((dev)))
+
+gboolean (fpi_device_emulation_mode_enabled) (FpDevice *device);
+
 G_END_DECLS

@@ -295,7 +295,7 @@ fpi_print_generate_user_id (FpPrint *print)
   if (!username)
     username = "nobody";
 
-  if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
+  if (fpi_device_emulation_mode_enabled (NULL))
     rand_id = 0;
   else
     rand_id = g_random_int ();

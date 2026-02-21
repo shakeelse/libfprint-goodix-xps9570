@@ -51,6 +51,35 @@ fp_device_get_instance_private (FpDevice *self)
 }
 
 /**
+ * fpi_device_emulation_mode_enabled:
+ * @device: The #FpDevice to check
+ *
+ * Checks if the device is running in emulation mode, which is enabled by
+ * setting the FP_DEVICE_EMULATION environment variable to a '1' value.
+ * This is used by some drivers to enable special behavior for testing
+ * and development purposes.
+ */
+gboolean
+  (fpi_device_emulation_mode_enabled) (FpDevice *device)
+{
+  static gsize emulation_mode = 0;
+
+  /* FIXME: Add some build constraints to make sure this cannot ever be enabled
+   * in production, outside in the installed tests case.
+   */
+
+  /* This is a global value for now, but ideally we may support a different
+   * value per device.
+   */
+  if (g_once_init_enter (&emulation_mode))
+    g_once_init_leave (&emulation_mode,
+                       g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0 ?
+                       TRUE : G_MAXSIZE);
+
+  return emulation_mode == TRUE;
+}
+
+/**
  * fpi_device_class_auto_initialize_features:
  * @device_class: An #FpDeviceClass to initialize
  *

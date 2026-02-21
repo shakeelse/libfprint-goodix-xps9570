@@ -855,7 +855,7 @@ secugen_frame_chunk_cb (FpiUsbTransfer *transfer,
 
   /* Outside emulation a complete sensor frame is expected. */
   if (self->bulk_offset < SECUGEN_RAW_SIZE &&
-      g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") != 0)
+      fpi_device_emulation_mode_enabled (dev))
     {
       fp_warn ("Short image data: got %" G_GSIZE_FORMAT ", expected %d",
                self->bulk_offset, SECUGEN_RAW_SIZE);
@@ -2225,7 +2225,7 @@ dev_change_state (FpImageDevice      *dev,
        * starts with the finger already present, so report it directly -
        * the same approach other drivers use for replay-incompatible
        * hardware behavior (e.g. elanspi's HID reset skip). */
-      if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
+      if (fpi_device_emulation_mode_enabled (FP_DEVICE (self)))
         {
           fpi_image_device_report_finger_status (dev, TRUE);
           break;
