@@ -412,6 +412,7 @@ nb1010_dev_change_state (FpImageDevice *dev, FpiImageDeviceState state)
 
 static const FpIdEntry id_table[] = {
   { .vid = 0x298d,  .pid = 0x1010, },
+  { .vid = 0x298d,  .pid = 0x2020, },
   { .vid = 0,  .pid = 0,  .driver_data = 0 },
 };
 
@@ -427,7 +428,7 @@ fpi_device_nb1010_class_init (FpiDeviceNb1010Class *klass)
   FpImageDeviceClass *img_class = FP_IMAGE_DEVICE_CLASS (klass);
 
   dev_class->id = FP_COMPONENT;
-  dev_class->full_name = "NextBiometrics NB-1010-U";
+  dev_class->full_name = "NextBiometrics NB-1010-U/NB-2020-U";
   dev_class->type = FP_DEVICE_TYPE_USB;
   dev_class->id_table = id_table;
   dev_class->scan_type = FP_SCAN_TYPE_PRESS;

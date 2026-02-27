@@ -262,6 +262,7 @@ usb:v3274p8012*
 
 # Supported by libfprint driver nb1010
 usb:v298Dp1010*
+usb:v298Dp2020*
  ID_AUTOSUSPEND=1
  ID_PERSIST=0
 
@@ -513,7 +514,6 @@ usb:v2808p93A9*
 usb:v2808pA658*
 usb:v2808pC652*
 usb:v2808pA553*
-usb:v298Dp2020*
 usb:v298Dp2033*
 usb:v2DF0p0003*
 usb:v3538p0930*
