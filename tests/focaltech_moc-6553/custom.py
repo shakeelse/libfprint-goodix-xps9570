@@ -26,8 +26,7 @@ del devices
 d.open_sync()
 assert d.get_driver() == "focaltech_moc"
 assert d.has_feature(FPrint.DeviceFeature.STORAGE_LIST)
-assert d.has_feature(FPrint.DeviceFeature.STORAGE_DELETE)
-#added storage clear
+assert not d.has_feature(FPrint.DeviceFeature.STORAGE_DELETE)
 assert d.has_feature(FPrint.DeviceFeature.STORAGE_CLEAR)
 
 
@@ -54,27 +53,17 @@ verify_res, verify_print = d.verify_sync(p)
 assert verify_res == True
 print("Verify done.")
 
+print("Delete is a no-op here")
+d.delete_print_sync(p)
+
 print('Identifying...')
 match, identify_print = d.identify_sync(stored, None, None, None)
 
-if match:
-    print('Identification SUCCESS')
-    assert match.equal(identify_print)
-else:
-    print('Identification FAILURE')
-    sys.exit(1)
+print('Identification SUCCESS')
+assert match.equal(identify_print)
+assert match.equal(p)
 
-print("Deleting...")
-try:
-    d.delete_print_sync(stored[0])
-except GLib.Error as error:
-    assert error.matches(FPrint.DeviceError.quark(),
-                         FPrint.DeviceError.NOT_SUPPORTED)
-else:
-    raise AssertionError("delete_print_sync unexpectedly succeeded")
-print("Delete not supported verified.")
-
-print("Clearing storage (0xAC)...")
+print("Clearing storage...")
 d.clear_storage_sync()
 
 final_list = d.list_prints_sync()

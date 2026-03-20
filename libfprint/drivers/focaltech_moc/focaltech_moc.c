@@ -1801,15 +1801,7 @@ static void
 focaltech_moc_delete_print (FpDevice *device)
 {
   FpiDeviceFocaltechMoc *self = FPI_DEVICE_FOCALTECH_MOC (device);
-  guint64 quirk = fpi_device_get_driver_data (device);
   FpActionData *data = NULL;
-
-  if (quirk == FOCALTECH_QUIRK_SINGLE_SLOT)
-    {
-      fpi_device_delete_complete (FP_DEVICE (self),
-                                  fpi_device_error_new (FP_DEVICE_ERROR_NOT_SUPPORTED));
-      return;
-    }
 
   data = g_new0 (FpActionData, 1);
   data->enrolled_info = g_new0 (struct EnrolledInfo, 1);
@@ -1967,6 +1959,17 @@ fpi_device_focaltech_moc_init (FpiDeviceFocaltechMoc *self)
 }
 
 static void
+focaltech_moc_probe (FpDevice *device)
+{
+  guint64 quirk = fpi_device_get_driver_data (device);
+
+  if (quirk == FOCALTECH_QUIRK_SINGLE_SLOT)
+    fpi_device_update_features (device, FP_DEVICE_FEATURE_STORAGE_DELETE, 0);
+
+  fpi_device_probe_complete (device, NULL, NULL, NULL);
+}
+
+static void
 fpi_device_focaltech_moc_class_init (FpiDeviceFocaltechMocClass *klass)
 {
   FpDeviceClass *dev_class = FP_DEVICE_CLASS (klass);
@@ -1980,6 +1983,7 @@ fpi_device_focaltech_moc_class_init (FpiDeviceFocaltechMocClass *klass)
   dev_class->nr_enroll_stages = FOCALTECH_MOC_MAX_FINGERS;
   dev_class->temp_hot_seconds = -1;
 
+  dev_class->probe = focaltech_moc_probe;
   dev_class->open = focaltech_moc_open;
   dev_class->close = focaltech_moc_close;
   dev_class->verify = focaltech_moc_identify;
