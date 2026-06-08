@@ -849,6 +849,41 @@ fpi_byte_reader_peek_data (const FpiByteReader * reader, guint size,
 }
 
 /**
+ * fpi_byte_reader_get_data_fixed:
+ * @reader: a #FpiByteReader instance
+ * @size: Size in bytes
+ * @val: (out) (array length=size): address of a buffer to copy data into
+ *
+ * Copies @size bytes from the current data position into @val if at
+ * least @size bytes are left, and updates the current position.
+ *
+ * Returns: %TRUE if successful, %FALSE otherwise.
+ */
+gboolean
+(fpi_byte_reader_get_data_static) (FpiByteReader * reader, guint size,
+    const guint8 * val)
+{
+  return (fpi_byte_reader_get_data_inline_static) (reader, size, val);
+}
+
+/**
+ * fpi_byte_reader_peek_data_fixed:
+ * @reader: a #FpiByteReader instance
+ * @size: Size in bytes
+ * @val: (out) (array length=size): address of a buffer to copy data into
+ *
+ * Like fpi_byte_reader_get_data_fixed() but does not advance the position.
+ *
+ * Returns: %TRUE if successful, %FALSE otherwise.
+ */
+gboolean
+(fpi_byte_reader_peek_data_static) (const FpiByteReader * reader, guint size,
+    guint8 * val)
+{
+  return (fpi_byte_reader_peek_data_inline_static) (reader, size, val);
+}
+
+/**
  * fpi_byte_reader_dup_data:
  * @reader: a #FpiByteReader instance
  * @size: Size in bytes
