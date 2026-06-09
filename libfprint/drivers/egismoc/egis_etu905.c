@@ -1445,8 +1445,6 @@ static void
 egis_etu905_dev_init_handler (FpiSsm   *ssm,
                               FpDevice *device)
 {
-  g_autoptr(FpiUsbTransfer) transfer = NULL;
-
   switch (fpi_ssm_get_cur_state (ssm))
     {
     case DEV_GET_FW_VERSION:
@@ -1462,15 +1460,6 @@ egis_etu905_dev_init_handler (FpiSsm   *ssm,
     default:
       g_assert_not_reached ();
     }
-
-  transfer = fpi_usb_transfer_new (device);
-  transfer->ssm = ssm;
-  transfer->short_is_error = TRUE;
-  fpi_usb_transfer_submit (g_steal_pointer (&transfer),
-                           EGIS_ETU905_USB_CONTROL_TIMEOUT,
-                           fpi_device_get_cancellable (device),
-                           fpi_ssm_usb_transfer_cb,
-                           NULL);
 }
 
 static void
