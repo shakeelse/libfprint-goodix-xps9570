@@ -185,7 +185,7 @@ G_DEFINE_TYPE (FpiDeviceSecugen,
  * correction, middle range scales linearly.  Identical to the table
  * stored in the device's firmware data block.
  */
-static const guint8 g_blend_curve[256] = {
+static const guint8 SECUGEN_BLEND_CURVE[256] = {
   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
   0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
   16,  17,  19,  21,  23,  25,  27,  29,  31,  32,  34,  36,  38,  40,  42,  44,
@@ -1449,6 +1449,184 @@ secugen_sharpen (const guint8 *src,
       }
 }
 
+typedef struct
+{
+  guint8  *raw_frame;
+  gboolean has_blc_offsets;
+  gint16   blc_offsets[16];
+  gboolean has_ref_image;
+  guint8  *ref_image;
+  guint16  cal_value;
+  gboolean sharpen_enabled;
+  guint8   sharpen_threshold;
+  guint8   sharpen_amount;
+  guint8   sharpen_limit;
+} SecugenCaptureTaskData;
+
+typedef struct
+{
+  guint8 *frame;
+  guint8 *cal_raw;
+} SecugenDetectTaskData;
+
+typedef struct
+{
+  guint    mean;
+  gboolean finger_present;
+  gboolean update_calibration;
+  guint8  *new_cal_raw;
+} SecugenDetectTaskResult;
+
+static void
+secugen_capture_task_data_free (SecugenCaptureTaskData *data)
+{
+  g_clear_pointer (&data->raw_frame, g_free);
+  g_clear_pointer (&data->ref_image, g_free);
+  g_free (data);
+}
+
+static void
+secugen_detect_task_data_free (SecugenDetectTaskData *data)
+{
+  g_clear_pointer (&data->frame, g_free);
+  g_clear_pointer (&data->cal_raw, g_free);
+  g_free (data);
+}
+
+static void
+secugen_detect_task_result_free (SecugenDetectTaskResult *result)
+{
+  g_clear_pointer (&result->new_cal_raw, g_free);
+  g_free (result);
+}
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SecugenCaptureTaskData, secugen_capture_task_data_free)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SecugenDetectTaskData, secugen_detect_task_data_free)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (SecugenDetectTaskResult, secugen_detect_task_result_free)
+
+static void
+secugen_capture_process_thread (GTask                    *task,
+                                gpointer source_object    G_GNUC_UNUSED,
+                                gpointer                  task_data,
+                                GCancellable *cancellable G_GNUC_UNUSED)
+{
+  SecugenCaptureTaskData *data = task_data;
+  g_autofree guint8 *image = g_malloc (SECUGEN_IMG_SIZE);
+
+  if (g_task_return_error_if_cancelled (task))
+    return;
+
+  /*
+   * Image processing pipeline:
+   *   1. Band compensation at 956x688
+   *   2. Edge-aware unsharp mask at 956x688
+   *   3. Bilinear downsample 956x688 → 300x400
+   *   4. Flat-field blend at 300x400
+   *   5. Directional sharpening at 300x400 (conditional)
+   *   6. Bitwise NOT invert
+   */
+
+  /* Step 1: BLC band compensation */
+  if (data->has_blc_offsets)
+    secugen_blc_compensate (data->raw_frame, SECUGEN_RAW_WIDTH,
+                            SECUGEN_RAW_HEIGHT, data->blc_offsets);
+
+  /* Step 2: Edge-aware unsharp mask */
+  secugen_unsharp_mask (data->raw_frame, SECUGEN_RAW_WIDTH, SECUGEN_RAW_HEIGHT);
+
+  /* Step 3: Bilinear downsample to 300x400 */
+  secugen_resize_bilinear (data->raw_frame,
+                           SECUGEN_RAW_WIDTH, SECUGEN_RAW_HEIGHT,
+                           image,
+                           SECUGEN_IMG_WIDTH, SECUGEN_IMG_HEIGHT);
+
+  if (g_task_return_error_if_cancelled (task))
+    return;
+
+  /* Step 4: Blend flat-field correction */
+  if (data->has_ref_image)
+    {
+      secugen_blend (image,
+                     SECUGEN_IMG_WIDTH, SECUGEN_IMG_HEIGHT,
+                     data->ref_image,
+                     data->cal_value,
+                     SECUGEN_BLEND_CURVE);
+    }
+
+  if (g_task_return_error_if_cancelled (task))
+    return;
+
+  /* Step 5: Directional sharpening (conditional) */
+  if (data->sharpen_enabled)
+    {
+      g_autofree guint8 *sharpened = g_malloc (SECUGEN_IMG_SIZE);
+
+      secugen_sharpen (image, sharpened,
+                       SECUGEN_IMG_WIDTH, SECUGEN_IMG_HEIGHT,
+                       data->sharpen_threshold,
+                       data->sharpen_amount,
+                       data->sharpen_limit);
+      memcpy (image, sharpened, SECUGEN_IMG_SIZE);
+    }
+
+  /* Step 6: Invert (bitwise NOT) */
+  for (int i = 0; i < SECUGEN_IMG_SIZE; i++)
+    image[i] = ~image[i];
+
+  if (g_task_return_error_if_cancelled (task))
+    return;
+
+  g_task_return_pointer (task, g_steal_pointer (&image), g_free);
+}
+
+static void
+secugen_detect_analyze_thread (GTask                 *task,
+                               gpointer source_object G_GNUC_UNUSED,
+                               gpointer               task_data,
+                               GCancellable          *cancellable)
+{
+  SecugenDetectTaskData *data = task_data;
+
+  g_autoptr(SecugenDetectTaskResult) result = g_new0 (SecugenDetectTaskResult, 1);
+  guint64 sum = 0;
+  int count = 0;
+  int start_row = SECUGEN_RAW_HEIGHT / 4;
+  int end_row = 3 * SECUGEN_RAW_HEIGHT / 4;
+  int start_col = SECUGEN_RAW_WIDTH / 4;
+  int end_col = 3 * SECUGEN_RAW_WIDTH / 4;
+
+  if (g_task_return_error_if_cancelled (task))
+    return;
+
+  /* Compute mean brightness of central 50% region */
+  for (int y = start_row; y < end_row; y++)
+    {
+      for (int x = start_col; x < end_col; x++)
+        {
+          int idx = y * SECUGEN_RAW_WIDTH + x;
+          int val = (int) data->frame[idx] - (int) data->cal_raw[idx];
+
+          if (val < 0)
+            val = 0;
+          sum += val;
+          count++;
+        }
+
+      if (g_task_return_error_if_cancelled (task))
+        return;
+    }
+
+  result->mean = count > 0 ? (guint) (sum / count) : 0;
+  result->finger_present = (result->mean >= SECUGEN_FINGER_THRESHOLD);
+  result->update_calibration = (!result->finger_present && result->mean <= 5);
+  if (result->update_calibration)
+    result->new_cal_raw = g_memdup2 (data->frame, SECUGEN_BULK_BUF_SIZE);
+
+  g_task_return_pointer (task,
+                         g_steal_pointer (&result),
+                         (GDestroyNotify) secugen_detect_task_result_free);
+}
+
 /* ================================================================
  * Capture State Machine
  *
@@ -1469,6 +1647,47 @@ enum capture_states {
   CAPTURE_DONE,
   CAPTURE_NUM_STATES,
 };
+
+static void
+capture_process_done (GObject      *source_object,
+                      GAsyncResult *result,
+                      gpointer      user_data)
+{
+  g_autoptr(FpImage) img = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree guint8 *processed = NULL;
+  FpDevice *dev = FP_DEVICE (source_object);
+  FpiDeviceSecugen *self = FPI_DEVICE_SECUGEN (dev);
+  FpiSsm *ssm = user_data;
+
+  processed = g_task_propagate_pointer (G_TASK (result), &error);
+  if (error)
+    {
+      if (self->deactivating &&
+          g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        {
+          fpi_ssm_mark_completed (ssm);
+          return;
+        }
+
+      fpi_ssm_mark_failed (ssm, g_steal_pointer (&error));
+      return;
+    }
+
+  if (self->deactivating)
+    {
+      fpi_ssm_mark_completed (ssm);
+      return;
+    }
+
+  img = fp_image_new (SECUGEN_IMG_WIDTH, SECUGEN_IMG_HEIGHT);
+  img->ppmm = SECUGEN_PPMM;
+  img->flags = FPI_IMAGE_V_FLIPPED | FPI_IMAGE_H_FLIPPED;
+  memcpy (img->data, processed, SECUGEN_IMG_SIZE);
+
+  fpi_image_device_image_captured (FP_IMAGE_DEVICE (dev), g_steal_pointer (&img));
+  fpi_ssm_mark_completed (ssm);
+}
 
 static void
 capture_status_cb (FpiUsbTransfer *transfer,
@@ -1533,75 +1752,37 @@ capture_run_state (FpiSsm *ssm, FpDevice *_dev)
 
     case CAPTURE_DONE:
       {
-        g_autoptr(FpImage) img = NULL;
-        g_autofree guint8 *raw = NULL;
-        int i;
+        g_autoptr(GTask) task = NULL;
+        g_autoptr(SecugenCaptureTaskData) task_data = NULL;
 
-        img = fp_image_new (SECUGEN_IMG_WIDTH, SECUGEN_IMG_HEIGHT);
-        img->ppmm = SECUGEN_PPMM;
-        img->flags = FPI_IMAGE_V_FLIPPED | FPI_IMAGE_H_FLIPPED;
+        /* Snapshot frame + calibration parameters for worker-thread processing.
+         * The shared driver buffers remain owned by the main thread. */
+        task_data = g_new0 (SecugenCaptureTaskData, 1);
+        task_data->raw_frame = g_memdup2 (self->bulk_buffer, SECUGEN_RAW_SIZE);
+        task_data->has_blc_offsets = self->has_blc_offsets;
+        memcpy (task_data->blc_offsets, self->blc_offsets, sizeof (task_data->blc_offsets));
+        task_data->has_ref_image = self->has_ref_image;
 
-        /* Work on a copy of the raw 956x688 sensor data */
-        raw = g_malloc (SECUGEN_RAW_SIZE);
-        memcpy (raw, self->bulk_buffer, SECUGEN_RAW_SIZE);
-
-        /*
-         * Image processing pipeline:
-         *   1. Band compensation at 956x688
-         *   2. Edge-aware unsharp mask at 956x688
-         *   3. Bilinear downsample 956x688 → 300x400
-         *   4. Flat-field blend at 300x400
-         *   5. Directional sharpening at 300x400 (conditional)
-         *   6. Bitwise NOT invert
-         */
-
-        /* Step 1: BLC band compensation */
-        if (self->has_blc_offsets)
-          {
-            secugen_blc_compensate (raw, SECUGEN_RAW_WIDTH,
-                                    SECUGEN_RAW_HEIGHT,
-                                    self->blc_offsets);
-          }
-
-        /* Step 2: Edge-aware unsharp mask */
-        secugen_unsharp_mask (raw, SECUGEN_RAW_WIDTH, SECUGEN_RAW_HEIGHT);
-
-        /* Step 3: Bilinear downsample to 300x400 */
-        secugen_resize_bilinear (raw,
-                                 SECUGEN_RAW_WIDTH, SECUGEN_RAW_HEIGHT,
-                                 img->data,
-                                 SECUGEN_IMG_WIDTH, SECUGEN_IMG_HEIGHT);
-
-        /* Step 4: Blend flat-field correction */
         if (self->has_ref_image)
-          {
-            secugen_blend (img->data,
-                           SECUGEN_IMG_WIDTH, SECUGEN_IMG_HEIGHT,
-                           self->ref_image, self->cal_value,
-                           g_blend_curve);
-          }
+          task_data->ref_image = g_memdup2 (self->ref_image, SECUGEN_IMG_SIZE);
 
-        /* Step 5: Directional sharpening (conditional) */
-        if (self->sharpen_enabled)
-          {
-            g_autofree guint8 *sharpened = g_malloc (SECUGEN_IMG_SIZE);
+        task_data->cal_value = self->cal_value;
+        task_data->sharpen_enabled = self->sharpen_enabled;
+        task_data->sharpen_threshold = self->sharpen_threshold;
+        task_data->sharpen_amount = self->sharpen_amount;
+        task_data->sharpen_limit = self->sharpen_limit;
 
-            secugen_sharpen (img->data, sharpened,
-                             SECUGEN_IMG_WIDTH, SECUGEN_IMG_HEIGHT,
-                             self->sharpen_threshold,
-                             self->sharpen_amount,
-                             self->sharpen_limit);
-            memcpy (img->data, sharpened, SECUGEN_IMG_SIZE);
-          }
-
-        /* Step 6: Invert (bitwise NOT) */
-        for (i = 0; i < SECUGEN_IMG_SIZE; i++)
-          img->data[i] = ~img->data[i];
-
-        fpi_image_device_image_captured (dev, g_steal_pointer (&img));
-        fpi_ssm_mark_completed (ssm);
+        task = g_task_new (FP_DEVICE (dev),
+                           fpi_device_get_cancellable (FP_DEVICE (dev)),
+                           capture_process_done,
+                           ssm);
+        g_task_set_source_tag (task, secugen_capture_process_thread);
+        g_task_set_check_cancellable (task, TRUE);
+        g_task_set_task_data (task, g_steal_pointer (&task_data),
+                              (GDestroyNotify) secugen_capture_task_data_free);
+        g_task_run_in_thread (task, secugen_capture_process_thread);
+        break;
       }
-      break;
     }
 }
 
@@ -1671,6 +1852,64 @@ enum detect_states {
 static void detect_start (FpImageDevice *dev);
 static void detect_retry_timeout (FpDevice          *dev,
                                   gpointer user_data G_GNUC_UNUSED);
+static void detect_analyze_done (GObject      *source_object,
+                                 GAsyncResult *result,
+                                 gpointer      user_data);
+
+static void
+detect_analyze_done (GObject      *source_object,
+                     GAsyncResult *result,
+                     gpointer      user_data)
+{
+  FpDevice *dev = FP_DEVICE (source_object);
+  FpiDeviceSecugen *self = FPI_DEVICE_SECUGEN (dev);
+  FpiSsm *ssm = user_data;
+
+  g_autoptr(GError) error = NULL;
+  g_autoptr(SecugenDetectTaskResult) analysis = NULL;
+
+  analysis = g_task_propagate_pointer (G_TASK (result), &error);
+  if (error)
+    {
+      if (self->deactivating &&
+          g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        {
+          fpi_ssm_mark_completed (ssm);
+          return;
+        }
+      fpi_ssm_mark_failed (ssm, g_steal_pointer (&error));
+      return;
+    }
+
+  if (self->deactivating)
+    {
+      fpi_ssm_mark_completed (ssm);
+      return;
+    }
+
+  fp_dbg ("Finger detect: mean brightness = %u (threshold %d)",
+          analysis->mean, SECUGEN_FINGER_THRESHOLD);
+
+  if (analysis->finger_present)
+    {
+      fp_dbg ("Finger detected!");
+      fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (dev), TRUE);
+    }
+  else
+    {
+      if (analysis->update_calibration && analysis->new_cal_raw)
+        memcpy (self->cal_raw, analysis->new_cal_raw, SECUGEN_BULK_BUF_SIZE);
+
+      self->finger_poll_source =
+        fpi_device_add_timeout (FP_DEVICE (dev),
+                                SECUGEN_FINGER_POLL_MS,
+                                detect_retry_timeout,
+                                NULL,
+                                NULL);
+    }
+
+  fpi_ssm_mark_completed (ssm);
+}
 
 static void
 detect_run_state (FpiSsm *ssm, FpDevice *_dev)
@@ -1706,15 +1945,8 @@ detect_run_state (FpiSsm *ssm, FpDevice *_dev)
 
     case DETECT_ANALYZE:
       {
-        guint64 sum = 0;
-        /* Use central 50% of the 956x688 raw sensor area */
-        int start_row = SECUGEN_RAW_HEIGHT / 4;
-        int end_row = 3 * SECUGEN_RAW_HEIGHT / 4;
-        int start_col = SECUGEN_RAW_WIDTH / 4;
-        int end_col = 3 * SECUGEN_RAW_WIDTH / 4;
-        int count = 0;
-        guint mean;
-        int y, x;
+        g_autoptr(GTask) task = NULL;
+        g_autoptr(SecugenDetectTaskData) task_data = NULL;
 
         /* If a deactivate arrived while this detect cycle ran, do not report
          * finger state or arm another poll - just unwind the SSM so the
@@ -1725,54 +1957,20 @@ detect_run_state (FpiSsm *ssm, FpDevice *_dev)
             break;
           }
 
-        /* Compute mean brightness of central 50% region */
-        for (y = start_row; y < end_row; y++)
-          for (x = start_col; x < end_col; x++)
-            {
-              int idx = y * SECUGEN_RAW_WIDTH + x;
+        /* Snapshot current frame/calibration for worker-thread analysis. */
+        task_data = g_new0 (SecugenDetectTaskData, 1);
+        task_data->frame = g_memdup2 (self->bulk_buffer, SECUGEN_BULK_BUF_SIZE);
+        task_data->cal_raw = g_memdup2 (self->cal_raw, SECUGEN_BULK_BUF_SIZE);
 
-              if (idx < SECUGEN_BULK_BUF_SIZE)
-                {
-                  int val = (int) self->bulk_buffer[idx] -
-                            (int) self->cal_raw[idx];
-
-                  if (val < 0)
-                    val = 0;
-                  sum += val;
-                  count++;
-                }
-            }
-
-        mean = count > 0 ? (guint) (sum / count) : 0;
-        fp_dbg ("Finger detect: mean brightness = %u (threshold %d)",
-                mean, SECUGEN_FINGER_THRESHOLD);
-
-        if (mean >= SECUGEN_FINGER_THRESHOLD)
-          {
-            fp_dbg ("Finger detected!");
-            fpi_image_device_report_finger_status (dev, TRUE);
-          }
-        else
-          {
-            /*
-             * No finger - update calibration reference from this frame
-             * only if truly empty (mean < 5). This avoids contaminating
-             * the reference with partial finger touches.
-             */
-            if (mean <= 5)
-              memcpy (self->cal_raw, self->bulk_buffer,
-                      SECUGEN_BULK_BUF_SIZE);
-
-            /* Schedule another poll */
-            self->finger_poll_source =
-              fpi_device_add_timeout (FP_DEVICE (dev),
-                                      SECUGEN_FINGER_POLL_MS,
-                                      detect_retry_timeout,
-                                      NULL,
-                                      NULL);
-          }
-
-        fpi_ssm_mark_completed (ssm);
+        task = g_task_new (FP_DEVICE (dev),
+                           fpi_device_get_cancellable (FP_DEVICE (dev)),
+                           detect_analyze_done,
+                           ssm);
+        g_task_set_source_tag (task, secugen_detect_analyze_thread);
+        g_task_set_check_cancellable (task, TRUE);
+        g_task_set_task_data (task, g_steal_pointer (&task_data),
+                              (GDestroyNotify) secugen_detect_task_data_free);
+        g_task_run_in_thread (task, secugen_detect_analyze_thread);
       }
       break;
     }
