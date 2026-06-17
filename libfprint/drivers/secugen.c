@@ -331,7 +331,7 @@ secugen_ctrl_out (FpiSsm        *ssm,
                   guint16        value,
                   guint16        idx)
 {
-  FpiUsbTransfer *transfer = fpi_usb_transfer_new (FP_DEVICE (dev));
+  g_autoptr(FpiUsbTransfer) transfer = fpi_usb_transfer_new (FP_DEVICE (dev));
 
   fpi_usb_transfer_fill_control (transfer,
                                  G_USB_DEVICE_DIRECTION_HOST_TO_DEVICE,
@@ -339,7 +339,7 @@ secugen_ctrl_out (FpiSsm        *ssm,
                                  G_USB_DEVICE_RECIPIENT_DEVICE,
                                  request, value, idx, 0);
   transfer->ssm = ssm;
-  fpi_usb_transfer_submit (transfer, SECUGEN_CTRL_TIMEOUT,
+  fpi_usb_transfer_submit (g_steal_pointer (&transfer), SECUGEN_CTRL_TIMEOUT,
                            fpi_device_get_cancellable (FP_DEVICE (dev)),
                            fpi_ssm_usb_transfer_cb, NULL);
 }
@@ -354,7 +354,7 @@ secugen_ctrl_out_data (FpiSsm        *ssm,
                        const guint8  *data,
                        gsize          len)
 {
-  FpiUsbTransfer *transfer = fpi_usb_transfer_new (FP_DEVICE (dev));
+  g_autoptr(FpiUsbTransfer) transfer = fpi_usb_transfer_new (FP_DEVICE (dev));
 
   fpi_usb_transfer_fill_control (transfer,
                                  G_USB_DEVICE_DIRECTION_HOST_TO_DEVICE,
@@ -363,7 +363,7 @@ secugen_ctrl_out_data (FpiSsm        *ssm,
                                  request, value, idx, len);
   memcpy (transfer->buffer, data, len);
   transfer->ssm = ssm;
-  fpi_usb_transfer_submit (transfer, SECUGEN_CTRL_TIMEOUT,
+  fpi_usb_transfer_submit (g_steal_pointer (&transfer), SECUGEN_CTRL_TIMEOUT,
                            fpi_device_get_cancellable (FP_DEVICE (dev)),
                            fpi_ssm_usb_transfer_cb, NULL);
 }
@@ -378,7 +378,7 @@ secugen_ctrl_in (FpiSsm                *ssm,
                  gsize                  len,
                  FpiUsbTransferCallback callback)
 {
-  FpiUsbTransfer *transfer = fpi_usb_transfer_new (FP_DEVICE (dev));
+  g_autoptr(FpiUsbTransfer) transfer = fpi_usb_transfer_new (FP_DEVICE (dev));
 
   fpi_usb_transfer_fill_control (transfer,
                                  G_USB_DEVICE_DIRECTION_DEVICE_TO_HOST,
@@ -386,7 +386,7 @@ secugen_ctrl_in (FpiSsm                *ssm,
                                  G_USB_DEVICE_RECIPIENT_DEVICE,
                                  request, value, idx, len);
   transfer->ssm = ssm;
-  fpi_usb_transfer_submit (transfer, SECUGEN_CTRL_TIMEOUT,
+  fpi_usb_transfer_submit (g_steal_pointer (&transfer), SECUGEN_CTRL_TIMEOUT,
                            fpi_device_get_cancellable (FP_DEVICE (dev)),
                            callback, NULL);
 }
@@ -626,12 +626,12 @@ init_fw_read_cb (FpiUsbTransfer *transfer,
                  gpointer        user_data,
                  GError         *error)
 {
+  g_autoptr(GError) local_error = error;
   FpiDeviceSecugen *self = FPI_DEVICE_SECUGEN (dev);
 
-  if (error)
+  if (local_error)
     {
-      fp_warn ("FW data read failed (non-fatal): %s", error->message);
-      g_error_free (error);
+      fp_warn ("FW data read failed (non-fatal): %s", local_error->message);
       fpi_ssm_next_state (transfer->ssm);
       return;
     }
@@ -803,22 +803,18 @@ secugen_frame_chunk_cb (FpiUsbTransfer *transfer,
                         gpointer        user_data,
                         GError         *error)
 {
+  g_autoptr(GError) local_error = error;
   FpiDeviceSecugen *self = FPI_DEVICE_SECUGEN (dev);
   gsize remaining;
   gsize copied;
 
-  if (error)
+  if (local_error)
     {
       /* A deactivate may have cancelled the transfer; unwind quietly. */
       if (self->deactivating)
-        {
-          g_error_free (error);
-          fpi_ssm_mark_completed (transfer->ssm);
-        }
+        fpi_ssm_mark_completed (transfer->ssm);
       else
-        {
-          fpi_ssm_mark_failed (transfer->ssm, error);
-        }
+        fpi_ssm_mark_failed (transfer->ssm, g_steal_pointer (&local_error));
       return;
     }
 
@@ -841,12 +837,12 @@ secugen_frame_chunk_cb (FpiUsbTransfer *transfer,
    * a short read means the stream has ended. */
   if (remaining > 0 && transfer->actual_length == transfer->length)
     {
-      FpiUsbTransfer *next = fpi_usb_transfer_new (dev);
+      g_autoptr(FpiUsbTransfer) next = fpi_usb_transfer_new (dev);
 
       next->ssm = transfer->ssm;
       fpi_usb_transfer_fill_bulk (next, SECUGEN_EP_DATA,
                                   MIN ((gsize) SECUGEN_BULK_CHUNK, remaining));
-      fpi_usb_transfer_submit (next, SECUGEN_BULK_TIMEOUT,
+      fpi_usb_transfer_submit (g_steal_pointer (&next), SECUGEN_BULK_TIMEOUT,
                                fpi_device_get_cancellable (dev),
                                secugen_frame_chunk_cb, NULL);
       return;
@@ -878,8 +874,8 @@ secugen_read_frame (FpiSsm   *ssm,
                     FpDevice *dev,
                     guint8   *dest)
 {
+  g_autoptr(FpiUsbTransfer) transfer = NULL;
   FpiDeviceSecugen *self = FPI_DEVICE_SECUGEN (dev);
-  FpiUsbTransfer *transfer;
 
   self->bulk_dest = dest;
   self->bulk_offset = 0;
@@ -889,7 +885,7 @@ secugen_read_frame (FpiSsm   *ssm,
   fpi_usb_transfer_fill_bulk (transfer, SECUGEN_EP_DATA,
                               MIN ((gsize) SECUGEN_BULK_CHUNK,
                                    (gsize) SECUGEN_BULK_BUF_SIZE));
-  fpi_usb_transfer_submit (transfer, SECUGEN_BULK_TIMEOUT,
+  fpi_usb_transfer_submit (g_steal_pointer (&transfer), SECUGEN_BULK_TIMEOUT,
                            fpi_device_get_cancellable (dev),
                            secugen_frame_chunk_cb, NULL);
 }
@@ -983,7 +979,7 @@ init_run_state (FpiSsm *ssm, FpDevice *_dev)
                     SECUGEN_FW_DATA_CHUNK;
 
         {
-          FpiUsbTransfer *transfer = fpi_usb_transfer_new (FP_DEVICE (dev));
+          g_autoptr(FpiUsbTransfer) transfer = fpi_usb_transfer_new (FP_DEVICE (dev));
 
           fpi_usb_transfer_fill_control (transfer,
                                          G_USB_DEVICE_DIRECTION_DEVICE_TO_HOST,
@@ -992,7 +988,7 @@ init_run_state (FpiSsm *ssm, FpDevice *_dev)
                                          SECUGEN_REQ_READ_FW_DATA,
                                          0x0000, offset, len);
           transfer->ssm = ssm;
-          fpi_usb_transfer_submit (transfer, SECUGEN_FW_READ_TIMEOUT,
+          fpi_usb_transfer_submit (g_steal_pointer (&transfer), SECUGEN_FW_READ_TIMEOUT,
                                    fpi_device_get_cancellable (FP_DEVICE (dev)),
                                    init_fw_read_cb, NULL);
         }
@@ -1222,8 +1218,8 @@ static void
 secugen_unsharp_mask (guint8 *image, int width, int height)
 {
   int total = width * height;
-  guint8 *original;
-  guint8 *averaged;
+  g_autofree guint8 *original = NULL;
+  g_autofree guint8 *averaged = NULL;
   int r, c;
 
   original = g_malloc (total);
@@ -1278,8 +1274,6 @@ secugen_unsharp_mask (guint8 *image, int width, int height)
         /* else: keep original */
       }
 
-  g_free (averaged);
-  g_free (original);
 }
 
 /*
@@ -1539,8 +1533,8 @@ capture_run_state (FpiSsm *ssm, FpDevice *_dev)
 
     case CAPTURE_DONE:
       {
-        FpImage *img;
-        guint8 *raw;
+        g_autoptr(FpImage) img = NULL;
+        g_autofree guint8 *raw = NULL;
         int i;
 
         img = fp_image_new (SECUGEN_IMG_WIDTH, SECUGEN_IMG_HEIGHT);
@@ -1590,7 +1584,7 @@ capture_run_state (FpiSsm *ssm, FpDevice *_dev)
         /* Step 5: Directional sharpening (conditional) */
         if (self->sharpen_enabled)
           {
-            guint8 *sharpened = g_malloc (SECUGEN_IMG_SIZE);
+            g_autofree guint8 *sharpened = g_malloc (SECUGEN_IMG_SIZE);
 
             secugen_sharpen (img->data, sharpened,
                              SECUGEN_IMG_WIDTH, SECUGEN_IMG_HEIGHT,
@@ -1598,16 +1592,13 @@ capture_run_state (FpiSsm *ssm, FpDevice *_dev)
                              self->sharpen_amount,
                              self->sharpen_limit);
             memcpy (img->data, sharpened, SECUGEN_IMG_SIZE);
-            g_free (sharpened);
           }
 
         /* Step 6: Invert (bitwise NOT) */
         for (i = 0; i < SECUGEN_IMG_SIZE; i++)
           img->data[i] = ~img->data[i];
 
-        g_free (raw);
-
-        fpi_image_device_image_captured (dev, img);
+        fpi_image_device_image_captured (dev, g_steal_pointer (&img));
         fpi_ssm_mark_completed (ssm);
       }
       break;
@@ -1619,6 +1610,7 @@ static void secugen_finish_deactivate (FpImageDevice *dev);
 static void
 capture_ssm_complete (FpiSsm *ssm, FpDevice *dev, GError *error)
 {
+  g_autoptr(GError) local_error = error;
   FpiDeviceSecugen *self = FPI_DEVICE_SECUGEN (dev);
   FpImageDevice *imgdev = FP_IMAGE_DEVICE (dev);
 
@@ -1626,16 +1618,15 @@ capture_ssm_complete (FpiSsm *ssm, FpDevice *dev, GError *error)
 
   if (self->deactivating)
     {
-      g_clear_error (&error);
       if (self->ssm_count == 0)
         secugen_finish_deactivate (imgdev);
       return;
     }
 
-  if (error)
+  if (local_error)
     {
-      fp_warn ("Capture failed: %s", error->message);
-      fpi_image_device_session_error (imgdev, error);
+      fp_warn ("Capture failed: %s", local_error->message);
+      fpi_image_device_session_error (imgdev, g_steal_pointer (&local_error));
     }
 }
 
@@ -1646,11 +1637,10 @@ secugen_noop_cb (FpiUsbTransfer *transfer,
                  gpointer        user_data,
                  GError         *error)
 {
-  if (error)
-    {
-      fp_warn ("Fire-and-forget transfer failed: %s", error->message);
-      g_error_free (error);
-    }
+  g_autoptr(GError) local_error = error;
+
+  if (local_error)
+    fp_warn ("Fire-and-forget transfer failed: %s", local_error->message);
 }
 
 /* ================================================================
@@ -1801,22 +1791,23 @@ detect_retry_timeout (FpDevice *dev, gpointer user_data G_GNUC_UNUSED)
 static void
 detect_ssm_complete (FpiSsm *ssm, FpDevice *dev, GError *error)
 {
+  g_autoptr(GError) local_error = error;
   FpiDeviceSecugen *self = FPI_DEVICE_SECUGEN (dev);
 
   self->ssm_count--;
 
   if (self->deactivating)
     {
-      g_clear_error (&error);
       if (self->ssm_count == 0)
         secugen_finish_deactivate (FP_IMAGE_DEVICE (dev));
       return;
     }
 
-  if (error)
+  if (local_error)
     {
-      fp_warn ("Finger detect failed: %s", error->message);
-      fpi_image_device_session_error (FP_IMAGE_DEVICE (dev), error);
+      fp_warn ("Finger detect failed: %s", local_error->message);
+      fpi_image_device_session_error (FP_IMAGE_DEVICE (dev),
+                                      g_steal_pointer (&local_error));
     }
 }
 
@@ -1848,8 +1839,7 @@ finger_off_timeout (FpDevice *dev, gpointer user_data G_GNUC_UNUSED)
 static void
 dev_init (FpImageDevice *dev)
 {
-  GError *error = NULL;
-
+  g_autoptr(GError) error = NULL;
   g_autoptr(GPtrArray) interfaces = NULL;
   GUsbInterface *iface = NULL;
   int i;
@@ -1858,7 +1848,7 @@ dev_init (FpImageDevice *dev)
     fpi_device_get_usb_device (FP_DEVICE (dev)), &error);
   if (error)
     {
-      fpi_image_device_open_complete (dev, error);
+      fpi_image_device_open_complete (dev, g_steal_pointer (&error));
       return;
     }
 
@@ -1893,7 +1883,7 @@ dev_init (FpImageDevice *dev)
           fpi_device_get_usb_device (FP_DEVICE (dev)),
           self->iface_num, 0, &error))
       {
-        fpi_image_device_open_complete (dev, error);
+        fpi_image_device_open_complete (dev, g_steal_pointer (&error));
         return;
       }
 
@@ -1915,8 +1905,8 @@ dev_init (FpImageDevice *dev)
 static void
 dev_deinit (FpImageDevice *dev)
 {
+  g_autoptr(GError) error = NULL;
   FpiDeviceSecugen *self = FPI_DEVICE_SECUGEN (dev);
-  GError *error = NULL;
 
   g_clear_pointer (&self->finger_poll_source, g_source_destroy);
 
@@ -1930,12 +1920,13 @@ dev_deinit (FpImageDevice *dev)
     fpi_device_get_usb_device (FP_DEVICE (dev)),
     self->iface_num, 0, &error);
 
-  fpi_image_device_close_complete (dev, error);
+  fpi_image_device_close_complete (dev, g_steal_pointer (&error));
 }
 
 static void
 activate_complete (FpiSsm *ssm, FpDevice *dev, GError *error)
 {
+  g_autoptr(GError) local_error = error;
   FpiDeviceSecugen *self = FPI_DEVICE_SECUGEN (dev);
   FpImageDevice *imgdev = FP_IMAGE_DEVICE (dev);
 
@@ -1943,16 +1934,15 @@ activate_complete (FpiSsm *ssm, FpDevice *dev, GError *error)
 
   if (self->deactivating)
     {
-      g_clear_error (&error);
       if (self->ssm_count == 0)
         secugen_finish_deactivate (imgdev);
       return;
     }
 
-  if (error)
-    fp_warn ("Activation failed: %s", error->message);
+  if (local_error)
+    fp_warn ("Activation failed: %s", local_error->message);
 
-  fpi_image_device_activate_complete (imgdev, error);
+  fpi_image_device_activate_complete (imgdev, g_steal_pointer (&local_error));
 }
 
 static void
@@ -1978,8 +1968,8 @@ dev_activate (FpImageDevice *dev)
 static void
 secugen_finish_deactivate (FpImageDevice *dev)
 {
+  g_autoptr(FpiUsbTransfer) transfer = NULL;
   FpiDeviceSecugen *self = FPI_DEVICE_SECUGEN (dev);
-  FpiUsbTransfer *transfer;
 
   self->deactivating = FALSE;
 
@@ -1991,7 +1981,7 @@ secugen_finish_deactivate (FpImageDevice *dev)
                                  G_USB_DEVICE_RECIPIENT_DEVICE,
                                  SECUGEN_REQ_LED_CONTROL,
                                  0x0000, 0, 0);
-  fpi_usb_transfer_submit (transfer, SECUGEN_CTRL_TIMEOUT, NULL,
+  fpi_usb_transfer_submit (g_steal_pointer (&transfer), SECUGEN_CTRL_TIMEOUT, NULL,
                            secugen_noop_cb, NULL);
 
   fpi_image_device_deactivate_complete (dev, NULL);
@@ -2045,7 +2035,7 @@ dev_change_state (FpImageDevice      *dev,
 
       /* Turn on LED */
       {
-        FpiUsbTransfer *transfer = fpi_usb_transfer_new (FP_DEVICE (dev));
+        g_autoptr(FpiUsbTransfer) transfer = fpi_usb_transfer_new (FP_DEVICE (dev));
 
         fpi_usb_transfer_fill_control (transfer,
                                        G_USB_DEVICE_DIRECTION_HOST_TO_DEVICE,
@@ -2053,7 +2043,7 @@ dev_change_state (FpImageDevice      *dev,
                                        G_USB_DEVICE_RECIPIENT_DEVICE,
                                        SECUGEN_REQ_LED_CONTROL,
                                        0x0001, 0, 0);
-        fpi_usb_transfer_submit (transfer, SECUGEN_CTRL_TIMEOUT, NULL,
+        fpi_usb_transfer_submit (g_steal_pointer (&transfer), SECUGEN_CTRL_TIMEOUT, NULL,
                                  secugen_noop_cb, NULL);
       }
 
