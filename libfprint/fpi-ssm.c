@@ -668,7 +668,7 @@ fpi_ssm_silence_debug (FpiSsm *machine)
  * @error: (transfer full): a #GError or %NULL.
  *
  * Can be used in as a #FpiUsbTransfer callback handler to automatically
- * advance or fail a statemachine on transfer completion.
+ * advance or fail a state machine on transfer completion.
  *
  * Make sure to set the #FpiSsm on the transfer.
  */
@@ -694,7 +694,7 @@ fpi_ssm_usb_transfer_cb (FpiUsbTransfer *transfer, FpDevice *device,
  * @error: (transfer full): a #GError or %NULL.
  *
  * Can be used in as a #FpiUsbTransfer callback handler to automatically
- * advance or fail a statemachine on transfer completion.
+ * advance or fail a state machine on transfer completion.
  * Passing a #gpointer* as @weak_ptr permits to nullify it once we're done
  * with the transfer.
  *
@@ -721,7 +721,7 @@ fpi_ssm_usb_transfer_with_weak_pointer_cb (FpiUsbTransfer *transfer,
  * @error: (transfer full): a #GError or %NULL.
  *
  * Can be used in as a #FpiSpiTransfer callback handler to automatically
- * advance or fail a statemachine on transfer completion.
+ * advance or fail a state machine on transfer completion.
  *
  * Make sure to set the #FpiSsm on the transfer.
  */
@@ -747,7 +747,7 @@ fpi_ssm_spi_transfer_cb (FpiSpiTransfer *transfer, FpDevice *device,
  * @error: (transfer full): a #GError or %NULL.
  *
  * Can be used in as a #FpiSpiTransfer callback handler to automatically
- * advance or fail a statemachine on transfer completion.
+ * advance or fail a state machine on transfer completion.
  * Passing a #gpointer* as @weak_ptr permits to nullify it once we're done
  * with the transfer.
  *
