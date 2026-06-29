@@ -792,7 +792,7 @@ fpi_device_remove (FpDevice *device)
 /**
  * fpi_device_action_error:
  * @device: The #FpDevice
- * @error: The #GError to return
+ * @error: (nullable) (transfer full): The #GError or %NULL on success
  *
  * Finish an ongoing action with an error. This is the same as calling
  * the corresponding complete function such as fpi_device_open_complete()
