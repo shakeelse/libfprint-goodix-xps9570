@@ -61,7 +61,7 @@ parse_print_data (GVariant      *data,
 
   *user_id = g_variant_get_fixed_array (user_id_var, user_id_len, 1);
 
-  if (*user_id_len <= 0 || *user_id_len > DEFAULT_UID_LEN)
+  if (*user_id_len == 0 || *user_id_len > DEFAULT_UID_LEN)
     return FALSE;
 
   if (*user_id[0] == '\0' || *user_id[0] == ' ')
