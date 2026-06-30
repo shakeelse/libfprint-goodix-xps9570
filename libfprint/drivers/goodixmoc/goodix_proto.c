@@ -253,6 +253,9 @@ gx_proto_parse_header (FpiByteReader *reader,
   if (!fpi_byte_reader_get_uint8 (reader, &pheader->rev_crc8))
     g_return_val_if_reached (-1);
 
+  if (pheader->len < PACKAGE_CRC_SIZE)
+    return -1;
+
   pheader->len -= PACKAGE_CRC_SIZE;
 
   return 0;
