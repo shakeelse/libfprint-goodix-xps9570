@@ -177,17 +177,25 @@ parse_get_enrolled_fingers_report (bmkt_msg_resp_t *msg_resp, bmkt_response_t *r
 
   if (msg_resp->payload_len < 2)
     return BMKT_UNRECOGNIZED_MESSAGE;
+
   /* 2 bytes per finger so calculate the total number of fingers to process*/
   int num_fingers = (msg_resp->payload_len) / 2;
 
   bmkt_enrolled_fingers_resp_t *get_enrolled_fingers_resp = &resp->response.enrolled_fingers_resp;
 
+  if (num_fingers > (int) G_N_ELEMENTS (get_enrolled_fingers_resp->fingers))
+    {
+      g_warning ("Device reported more enrolled fingers (%d) than supported",
+                 num_fingers);
+      num_fingers = G_N_ELEMENTS (get_enrolled_fingers_resp->fingers);
+    }
+
   for (i = 0; i < num_fingers; i++)
     {
       get_enrolled_fingers_resp->fingers[i].finger_id = extract8 (msg_resp->payload, &offset);
       get_enrolled_fingers_resp->fingers[i].template_status = extract8 (msg_resp->payload, &offset);
-
     }
+
   return BMKT_SUCCESS;
 }
 static int
