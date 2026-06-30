@@ -63,7 +63,7 @@ usb_print_packet (int dir, GError *error, const guint8 *data, int length)
 }
 #endif
 
-static void
+static gboolean
 usb_recv (FpDeviceVfs301 *dev, guint8 endpoint, int max_bytes, FpiUsbTransfer **out, GError **error)
 {
   GError *err = NULL;
@@ -87,10 +87,14 @@ usb_recv (FpDeviceVfs301 *dev, guint8 endpoint, int max_bytes, FpiUsbTransfer **
       if (!error)
         g_warning ("Unhandled receive error: %s", err->message);
       g_propagate_error (error, err);
+
+      return FALSE;
     }
 
   if (out)
     *out = g_steal_pointer (&transfer);
+
+  return TRUE;
 }
 
 FP_GNUC_ACCESS (read_only, 2, 3)
@@ -462,26 +466,25 @@ vfs301_proto_request_fingerprint (FpDeviceVfs301 *dev)
 }
 
 int
-vfs301_proto_peek_event (FpDeviceVfs301 *dev)
+vfs301_proto_peek_event (FpDeviceVfs301 *dev,
+                         GError        **error)
 {
-  g_autoptr(GError) error = NULL;
   g_autoptr(FpiUsbTransfer) transfer = NULL;
 
   const char no_event[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   const char got_event[] = {0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00};
 
   USB_SEND (0x17, -1);
-  usb_recv (dev, VFS301_RECEIVE_ENDPOINT_CTRL, 7, &transfer, &error);
-
-  /* XXX: This is obviously not a sane error handling! */
-  g_assert (!error);
+  if (!usb_recv (dev, VFS301_RECEIVE_ENDPOINT_CTRL, 7, &transfer, error))
+    return -1;
 
   if (memcmp (transfer->buffer, no_event, sizeof (no_event)) == 0)
     return 0;
   else if (memcmp (transfer->buffer, got_event, sizeof (no_event)) == 0)
     return 1;
-  else
-    g_assert_not_reached ();
+
+  g_set_error (error, FP_DEVICE_ERROR_PROTO, 0, "Unexpected event response");
+  return -1;
 }
 
 /* XXX: We sometimes need to receive data on from two endpoints at the same

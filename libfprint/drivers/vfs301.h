@@ -133,7 +133,8 @@ void vfs301_proto_deinit (FpDeviceVfs301 *dev);
 void vfs301_proto_request_fingerprint (FpDeviceVfs301 *dev);
 
 /** returns 0 if no event is ready, or 1 if there is one... */
-int vfs301_proto_peek_event (FpDeviceVfs301 *dev);
+int vfs301_proto_peek_event (FpDeviceVfs301 *dev,
+                             GError        **error);
 void vfs301_proto_process_event_start (FpDeviceVfs301 *dev);
 int vfs301_proto_process_event_poll (FpDeviceVfs301 *dev);
 

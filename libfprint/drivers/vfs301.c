@@ -85,6 +85,7 @@ enum {
 static void
 m_loop_state (FpiSsm *ssm, FpDevice *_dev)
 {
+  g_autoptr(GError) error = NULL;
   FpImageDevice *dev = FP_IMAGE_DEVICE (_dev);
   FpDeviceVfs301 *self = FPI_DEVICE_VFS301 (_dev);
 
@@ -101,10 +102,16 @@ m_loop_state (FpiSsm *ssm, FpDevice *_dev)
       break;
 
     case M_CHECK_PRINT:
-      if (!vfs301_proto_peek_event (self))
-        fpi_ssm_jump_to_state (ssm, M_WAIT_PRINT);
-      else
-        fpi_ssm_next_state (ssm);
+      {
+        int rv = vfs301_proto_peek_event (self, &error);
+
+        if (rv == VFS301_FAILURE)
+          fpi_ssm_mark_failed (ssm, error);
+        else if (rv == VFS301_ONGOING)
+          fpi_ssm_jump_to_state (ssm, M_WAIT_PRINT);
+        else
+          fpi_ssm_next_state (ssm);
+      }
       break;
 
     case M_READ_PRINT_START:
