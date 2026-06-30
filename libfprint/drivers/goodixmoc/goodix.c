@@ -173,6 +173,7 @@ fp_cmd_receive_cb (FpiUsbTransfer *transfer,
       fpi_ssm_mark_failed (transfer->ssm,
                            fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
                                                      "Package crc read failed"));
+      return;
     }
 
   gx_proto_crc32_calc (transfer->buffer, PACKAGE_HEADER_SIZE + header.len, (uint8_t *) &crc32_calc);
