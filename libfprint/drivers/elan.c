@@ -251,7 +251,12 @@ elan_process_frame_linear (unsigned short *raw_frame,
         max = raw_frame[i];
     }
 
-  g_assert (max != min);
+  if (max == min)
+    {
+      memset (frame->data, 0, frame_size);
+      *frames = g_slist_prepend (*frames, frame);
+      g_return_if_reached ();
+    }
 
   unsigned short px;
 
