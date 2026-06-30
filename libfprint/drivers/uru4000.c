@@ -755,6 +755,17 @@ imaging_run_state (FpiSsm *ssm, FpDevice *_dev)
           if (num_lines == 0)
             break;
 
+          /* num_lines is device-supplied; make sure decoding this block stays
+           * within the captured image buffer (IMAGE_HEIGHT rows). */
+          if ((size_t) self->img_lines_done + num_lines > IMAGE_HEIGHT)
+            {
+              fp_err ("bad captured image: block %d (%d lines) overflows buffer",
+                      self->img_block, num_lines);
+              fpi_ssm_mark_failed (ssm,
+                                   fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
+              return;
+            }
+
           fp_dbg ("%d %02x %d", self->img_block, flags,
                   num_lines);
           if (flags & BLOCKF_CHANGE_KEY)
