@@ -722,7 +722,7 @@ complete_deactivation (FpImageDevice *dev)
   G_DEBUG_HERE ();
 
   priv->deactivating = FALSE;
-  g_slist_free (priv->strips);
+  g_slist_free_full (priv->strips, g_free);
   priv->strips = NULL;
   priv->strips_len = 0;
   fpi_image_device_deactivate_complete (dev, NULL);
