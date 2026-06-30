@@ -308,6 +308,14 @@ __handle_incoming_msg (FpDevice             *device,
         fp_dbg ("non-zero bytes in cmd response");
 
       innerlen = innerbuf[1] | (innerbuf[2] << 8);
+      if (innerlen < 3 || innerlen > len - 3)
+        {
+          fp_warn ("cmd response has invalid inner length (%d)", innerlen);
+          error = fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                            "CMD response has invalid inner length");
+          goto err;
+        }
+
       innerlen = innerlen - 3;
       _subcmd = innerbuf[5];
       fp_dbg ("device responds to subcmd %x with %d bytes", _subcmd, innerlen);
