@@ -122,6 +122,9 @@ egismoc_validate_response_prefix (const guchar *buffer_in,
                                   const guchar *valid_prefix,
                                   const gsize   valid_prefix_len)
 {
+  if (buffer_in_len < egismoc_read_prefix_len + EGISMOC_CHECK_BYTES_LENGTH + valid_prefix_len)
+    return FALSE;
+
   const gboolean result = memcmp (buffer_in +
                                   (egismoc_read_prefix_len +
                                    EGISMOC_CHECK_BYTES_LENGTH),
@@ -138,6 +141,9 @@ egismoc_validate_response_suffix (const guchar *buffer_in,
                                   const guchar *valid_suffix,
                                   const gsize   valid_suffix_len)
 {
+  if (buffer_in_len < valid_suffix_len)
+    return FALSE;
+
   const gboolean result = memcmp (buffer_in + (buffer_in_len - valid_suffix_len),
                                   valid_suffix,
                                   valid_suffix_len) == 0;
@@ -1177,6 +1183,14 @@ egismoc_identify_check_cb (FpDevice *device,
          On success, there is a 32 byte array of "something"(?) in chars 14-45
          and then the 32 byte array ID of the matched print comes as chars 46-77
        */
+      if (length_in < EGISMOC_IDENTIFY_RESPONSE_PRINT_ID_OFFSET + EGISMOC_FINGERPRINT_DATA_SIZE)
+        {
+          fpi_ssm_mark_failed (self->task_ssm,
+                               fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                         "Identify response too short"));
+          return;
+        }
+
       memcpy (device_print_id,
               buffer_in + EGISMOC_IDENTIFY_RESPONSE_PRINT_ID_OFFSET,
               EGISMOC_FINGERPRINT_DATA_SIZE);
@@ -1353,6 +1367,15 @@ egismoc_fw_version_cb (FpDevice *device,
    * all but the last 2 bytes as the FW Version
    */
   prefix_length = egismoc_read_prefix_len + 2 + 3 + 1;
+
+  if (length_in < prefix_length + rsp_fw_version_suffix_len)
+    {
+      fpi_ssm_mark_failed (self->task_ssm,
+                           fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                     "Firmware version response too short"));
+      return;
+    }
+
   fw_version_start = buffer_in + prefix_length;
   fw_version_length = length_in - prefix_length - rsp_fw_version_suffix_len;
   fw_version = g_strndup ((gchar *) fw_version_start, fw_version_length);
