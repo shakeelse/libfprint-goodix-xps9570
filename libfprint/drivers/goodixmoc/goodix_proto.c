@@ -253,11 +253,6 @@ gx_proto_parse_header (FpiByteReader *reader,
   if (!fpi_byte_reader_get_uint8 (reader, &pheader->rev_crc8))
     g_return_val_if_reached (-1);
 
-  if (pheader->len < PACKAGE_CRC_SIZE)
-    return -1;
-
-  pheader->len -= PACKAGE_CRC_SIZE;
-
   return 0;
 }
 
@@ -266,7 +261,6 @@ gx_proto_parse_fingerid (FpiByteReader     *reader,
                          ptemplate_format_t template)
 {
   uint8_t byte;
-  const uint8_t *buffer;
 
   if (!template)
     return -1;
@@ -283,15 +277,11 @@ gx_proto_parse_fingerid (FpiByteReader     *reader,
   if (!fpi_byte_reader_skip (reader, 1))
     g_return_val_if_reached (-1);
 
-  if (!fpi_byte_reader_get_data (reader, sizeof (template->accountid), &buffer))
+  if (!fpi_byte_reader_get_data_static (reader, template->accountid))
     g_return_val_if_reached (-1);
 
-  memcpy (template->accountid, buffer, sizeof (template->accountid));
-
-  if (!fpi_byte_reader_get_data (reader, sizeof (template->tid), &buffer))
+  if (!fpi_byte_reader_get_data_static (reader, template->tid))
     g_return_val_if_reached (-1);
-
-  memcpy (template->tid, buffer, sizeof (template->tid));
 
   if (!fpi_byte_reader_get_uint8 (reader, &template->payload.size))
     g_return_val_if_reached (-1);
@@ -302,10 +292,9 @@ gx_proto_parse_fingerid (FpiByteReader     *reader,
       return -1;
     }
 
-  if (!fpi_byte_reader_get_data (reader, template->payload.size, &buffer))
+  if (!(fpi_byte_reader_get_data_static) (reader, template->payload.size,
+                                          template->payload.data))
     g_return_val_if_reached (-1);
-
-  memcpy (template->payload.data, buffer, template->payload.size);
 
   return 0;
 }

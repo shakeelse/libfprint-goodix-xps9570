@@ -157,8 +157,7 @@ fp_cmd_receive_cb (FpiUsbTransfer *transfer,
       return;
     }
 
-  reader.data = transfer->buffer;
-  reader.size = transfer->actual_length;
+  fpi_byte_reader_init (&reader, transfer->buffer, transfer->actual_length);
 
   if (gx_proto_parse_header (&reader, &header) != 0)
     {
@@ -168,7 +167,8 @@ fp_cmd_receive_cb (FpiUsbTransfer *transfer,
       return;
     }
 
-  if (!fpi_byte_reader_set_pos (&reader, PACKAGE_HEADER_SIZE + header.len))
+  if (header.len < PACKAGE_CRC_SIZE ||
+      !fpi_byte_reader_set_pos (&reader, PACKAGE_HEADER_SIZE + header.len - PACKAGE_CRC_SIZE))
     {
       fpi_ssm_mark_failed (transfer->ssm,
                            fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
@@ -176,7 +176,13 @@ fp_cmd_receive_cb (FpiUsbTransfer *transfer,
       return;
     }
 
-  gx_proto_crc32_calc (transfer->buffer, PACKAGE_HEADER_SIZE + header.len, (uint8_t *) &crc32_calc);
+  /* Exclude the CRC from the package length */
+  header.len -= PACKAGE_CRC_SIZE;
+
+  /* The reader is positioned right at the CRC, i.e. at the end of the data the
+   * CRC is computed over, so use its position as the length. */
+  gx_proto_crc32_calc (transfer->buffer, fpi_byte_reader_get_pos (&reader),
+                       (uint8_t *) &crc32_calc);
 
   if (!fpi_byte_reader_get_uint32_le (&reader, &crc32) ||
       GUINT32_FROM_LE (crc32_calc) != crc32)
@@ -189,9 +195,7 @@ fp_cmd_receive_cb (FpiUsbTransfer *transfer,
 
   cmd = MAKE_CMD_EX (header.cmd0, header.cmd1);
 
-  fpi_byte_reader_set_pos (&reader, 0);
-  reader.data = &transfer->buffer[PACKAGE_HEADER_SIZE];
-  reader.size = header.len;
+  fpi_byte_reader_init (&reader, &transfer->buffer[PACKAGE_HEADER_SIZE], header.len);
 
   if (gx_proto_parse_body (cmd, &reader, &cmd_reponse) != 0)
     {
