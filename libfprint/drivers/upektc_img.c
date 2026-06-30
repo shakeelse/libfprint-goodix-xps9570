@@ -432,11 +432,9 @@ capture_run_state (FpiSsm *ssm, FpDevice *_dev)
 static void
 capture_sm_complete (FpiSsm *ssm, FpDevice *_dev, GError *error_arg)
 {
+  g_autoptr(GError) error = error_arg;
   FpImageDevice *dev = FP_IMAGE_DEVICE (_dev);
   FpiDeviceUpektcImg *self = FPI_DEVICE_UPEKTC_IMG (_dev);
-
-  g_autoptr(GError) error = error_arg;
-
 
   /* Note: We assume that the error is a cancellation in the deactivation case */
   if (self->deactivating)
@@ -518,6 +516,7 @@ deactivate_sm_complete (FpiSsm *ssm, FpDevice *_dev, GError *error)
 
   fp_dbg ("Deactivate completed");
 
+  g_clear_pointer (&self->image_bits, g_free);
   self->deactivating = FALSE;
   fpi_image_device_deactivate_complete (dev,  error);
 }
@@ -632,6 +631,7 @@ init_read_data_cb (FpiUsbTransfer *transfer, FpDevice *device,
         }
 
       self->expected_image_size = img_class->img_width * img_class->img_height;
+      g_clear_pointer (&self->image_bits, g_free);
       self->image_bits = g_malloc0 (self->expected_image_size * 2);
     }
 
