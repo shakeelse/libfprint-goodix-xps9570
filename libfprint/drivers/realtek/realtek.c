@@ -638,6 +638,14 @@ fp_cmd_receive_cb (FpiUsbTransfer *transfer,
     {
       g_autofree guchar *read_buf = NULL;
 
+      if ((gsize) transfer->actual_length < self->trans_data_len)
+        {
+          fpi_ssm_mark_failed (transfer->ssm,
+                               fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                         "Truncated data received"));
+          return;
+        }
+
       read_buf = g_malloc0 (sizeof (guchar) * (self->trans_data_len));
       memcpy (read_buf, transfer->buffer, self->trans_data_len);
       self->read_data = g_steal_pointer (&read_buf);
