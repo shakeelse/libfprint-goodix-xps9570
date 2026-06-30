@@ -338,7 +338,14 @@ msg_parse_regs (FpiDeviceEtes603 *dev)
   struct egis_msg *msg_req = dev->req;
   struct egis_msg *msg_ans = dev->ans;
 
+  g_return_val_if_fail (dev->ans_len >= MSG_HDR_SIZE, -1);
+
   n_args = dev->ans_len - MSG_HDR_SIZE;
+  if (n_args > REG_MAX)
+    {
+      g_warn_if_reached ();
+      n_args = REG_MAX;
+    }
 
   if (msg_header_check (msg_ans))
     return -1;
@@ -575,12 +582,24 @@ static void
 process_removefpi_end (FpiDeviceEtes603 *dev)
 {
   unsigned int i;
+
+  /* Need at least the 2-line empty pattern to compare against. */
+  if (dev->fp_height < 2)
+    g_return_if_reached ();
+
   /* 2 last lines with Fly-Estimation are the empty pattern. */
   guint8 *pattern = dev->fp + (dev->fp_height - 2) * FE_WIDTH / 2;
 
   for (i = 2; i < dev->fp_height; i += 2)
     if (memcmp (pattern, pattern - (i * FE_WIDTH / 2), FE_WIDTH))
       break;
+
+  if (i > dev->fp_height)
+    {
+      g_warn_if_reached ();
+      i = dev->fp_height;
+    }
+
   dev->fp_height -= i;
   fp_dbg ("Removing %d empty lines from image", i - 2);
 }
