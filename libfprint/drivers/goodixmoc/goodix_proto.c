@@ -416,6 +416,13 @@ gx_proto_parse_body (uint16_t cmd, FpiByteReader *byte_reader, pgxfp_cmd_respons
                                       &presp->finger_list_resp.finger_num))
         g_return_val_if_reached (-1);
 
+      if (presp->finger_list_resp.finger_num > FP_MAX_FINGERNUM)
+        {
+          g_warning ("Device reported too many fingers (%d)",
+                     presp->finger_list_resp.finger_num);
+          return -1;
+        }
+
       for(uint8_t num = 0; num < presp->finger_list_resp.finger_num; num++)
         {
           uint16_t fingerid_length;
