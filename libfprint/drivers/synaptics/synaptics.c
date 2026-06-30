@@ -172,6 +172,14 @@ cmd_receive_cb (FpiUsbTransfer *transfer,
        *      The original code did not! */
       if (msg_resp.msg_id == BMKT_RSP_GENERAL_ERROR)
         {
+          if (msg_resp.payload_len < 2 || !msg_resp.payload)
+            {
+              fp_warn ("Received General Error with short or empty payload");
+              fpi_ssm_mark_failed (transfer->ssm,
+                                   fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
+              return;
+            }
+
           guint16 err;
 
           /* XXX: It is weird that this is big endian. */

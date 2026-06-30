@@ -214,10 +214,18 @@ parse_get_enrolled_users_report (bmkt_msg_resp_t *msg_resp, bmkt_response_t *res
       get_enroll_templates_resp->templates[n].user_id_len = extract8 (msg_resp->payload, &offset) - 2;
       if(get_enroll_templates_resp->templates[n].user_id_len > BMKT_MAX_USER_ID_LEN)
         return BMKT_UNRECOGNIZED_MESSAGE;
+      if (offset >= msg_resp->payload_len)
+        return BMKT_CORRUPT_MESSAGE;
       get_enroll_templates_resp->templates[n].template_status = extract8 (msg_resp->payload, &offset);
+      if (offset >= msg_resp->payload_len)
+        return BMKT_CORRUPT_MESSAGE;
       get_enroll_templates_resp->templates[n].finger_id = extract8 (msg_resp->payload, &offset);
       for (i = 0; i < get_enroll_templates_resp->templates[n].user_id_len; i++)
-        get_enroll_templates_resp->templates[n].user_id[i] = extract8 (msg_resp->payload, &offset);
+        {
+          if (offset >= msg_resp->payload_len)
+            return BMKT_CORRUPT_MESSAGE;
+          get_enroll_templates_resp->templates[n].user_id[i] = extract8 (msg_resp->payload, &offset);
+        }
       get_enroll_templates_resp->templates[n].user_id[i] = '\0';
     }
 
@@ -267,12 +275,19 @@ bmkt_compose_message (uint8_t *cmd, int *cmd_len, uint8_t msg_id, uint8_t seq_nu
 int
 bmkt_parse_message_header (uint8_t *resp_buf, int resp_len, bmkt_msg_resp_t *msg_resp)
 {
+  if (resp_len < BMKT_MESSAGE_HEADER_LEN)
+    return BMKT_CORRUPT_MESSAGE;
+
   if (resp_buf[BMKT_MESSAGE_HEADER_ID_FIELD] != BMKT_MESSAGE_HEADER_ID)
     return BMKT_CORRUPT_MESSAGE;
 
   msg_resp->seq_num = resp_buf[BMKT_MESSAGE_SEQ_NUM_FIELD];
   msg_resp->msg_id = resp_buf[BMKT_MESSAGE_ID_FIELD];
   msg_resp->payload_len = resp_buf[BMKT_MESSAGE_PAYLOAD_LEN_FIELD];
+
+  if (msg_resp->payload_len > resp_len - BMKT_MESSAGE_PAYLOAD_FIELD)
+    return BMKT_CORRUPT_MESSAGE;
+
   if (msg_resp->payload_len > 0)
     msg_resp->payload = &resp_buf[BMKT_MESSAGE_PAYLOAD_FIELD];
   else
