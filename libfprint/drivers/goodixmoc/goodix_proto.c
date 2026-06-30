@@ -296,6 +296,12 @@ gx_proto_parse_fingerid (FpiByteReader     *reader,
   if (!fpi_byte_reader_get_uint8 (reader, &template->payload.size))
     g_return_val_if_reached (-1);
 
+  if (template->payload.size > sizeof (template->payload.data))
+    {
+      g_warning ("Device reported oversized payload (%d)", template->payload.size);
+      return -1;
+    }
+
   if (!fpi_byte_reader_get_data (reader, template->payload.size, &buffer))
     g_return_val_if_reached (-1);
 
