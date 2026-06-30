@@ -390,11 +390,20 @@ elanmoc_enroll_cb (FpiDeviceElanmoc *self,
         }
 
       if (self->num_frames == self->max_moc_enroll_time && buffer_in[1] == ELAN_MSG_OK)
-        fpi_ssm_next_state (self->task_ssm);
+        {
+          fpi_ssm_next_state (self->task_ssm);
+        }
       else if (self->num_frames < self->max_moc_enroll_time)
-        fpi_ssm_jump_to_state (self->task_ssm, MOC_ENROLL_WAIT_FINGER);
+        {
+          fpi_ssm_jump_to_state (self->task_ssm, MOC_ENROLL_WAIT_FINGER);
+        }
       else
-        fpi_ssm_mark_failed (self->task_ssm, error);
+        {
+          fpi_ssm_mark_failed (self->task_ssm,
+                               fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                         "Enrollment failed (status 0x%02x)",
+                                                         buffer_in[1]));
+        }
     }
 }
 
