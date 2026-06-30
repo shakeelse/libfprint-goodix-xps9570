@@ -121,8 +121,11 @@ m_loop_state (FpiSsm *ssm, FpDevice *_dev)
     case M_READ_PRINT_POLL:
       {
         int rv = vfs301_proto_process_event_poll (self);
-        g_assert (rv != VFS301_FAILURE);
-        if (rv == VFS301_ONGOING)
+
+        if (rv == VFS301_FAILURE)
+          fpi_ssm_mark_failed (ssm,
+                               fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
+        else if (rv == VFS301_ONGOING)
           fpi_ssm_jump_to_state (ssm, M_READ_PRINT_WAIT);
         else
           fpi_ssm_next_state (ssm);
