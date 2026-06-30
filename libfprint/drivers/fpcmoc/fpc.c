@@ -173,6 +173,15 @@ fpc_cmd_receive_cb (FpiUsbTransfer *transfer,
               return;
             }
 
+          if (transfer->actual_length > sizeof (fpc_cmd_response_t))
+            {
+              fp_err ("%s recv evt data length (%ld) exceeds buffer size (%ld)",
+                      G_STRFUNC, transfer->actual_length, sizeof (fpc_cmd_response_t));
+              fpi_ssm_mark_failed (transfer->ssm,
+                                   fpi_device_error_new (FP_DEVICE_ERROR_DATA_INVALID));
+              return;
+            }
+
           data->resp_len = transfer->actual_length;
 
           if (data->callback)
