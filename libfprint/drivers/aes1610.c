@@ -791,7 +791,7 @@ complete_deactivation (FpImageDevice *dev)
    * maybe we can do this with a master reset, unconditionally? */
 
   self->deactivating = FALSE;
-  g_slist_free (self->strips);
+  g_slist_free_full (self->strips, g_free);
   self->strips = NULL;
   self->strips_len = 0;
   self->blanks_count = 0;
