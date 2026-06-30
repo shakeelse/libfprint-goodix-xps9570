@@ -681,10 +681,10 @@ calc_dev2 (struct uru4k_image *img)
 static void
 imaging_run_state (FpiSsm *ssm, FpDevice *_dev)
 {
+  g_autoptr(FpImage) fpimg = NULL;
   FpImageDevice *dev = FP_IMAGE_DEVICE (_dev);
   FpiDeviceUru4000 *self = FPI_DEVICE_URU4000 (_dev);
   struct uru4k_image *img = self->img_data;
-  FpImage *fpimg;
   uint32_t key;
   uint8_t flags, num_lines;
   int i, r, to, dev2;
@@ -798,6 +798,17 @@ imaging_run_state (FpiSsm *ssm, FpDevice *_dev)
           num_lines = img->block_info[i].num_lines;
           if (num_lines == 0)
             break;
+
+          if ((size_t) r + num_lines > IMAGE_HEIGHT ||
+              (size_t) to + (size_t) num_lines * IMAGE_WIDTH > fpimg->width * fpimg->height)
+            {
+              fp_err ("bad captured image: block %d (%d lines) overflows buffer",
+                      i, num_lines);
+              fpi_ssm_mark_failed (ssm,
+                                   fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
+              return;
+            }
+
           memcpy (&fpimg->data[to], &img->data[r][0],
                   num_lines * IMAGE_WIDTH);
           if (!(flags & BLOCKF_NOT_PRESENT))
@@ -814,7 +825,8 @@ imaging_run_state (FpiSsm *ssm, FpDevice *_dev)
        */
       if (self->profile->image_not_flipped)
         fpimg->flags |= FPI_IMAGE_V_FLIPPED | FPI_IMAGE_H_FLIPPED;
-      fpi_image_device_image_captured (dev, fpimg);
+
+      fpi_image_device_image_captured (dev, g_steal_pointer (&fpimg));
 
       if (self->activate_state == FPI_IMAGE_DEVICE_STATE_CAPTURE)
         fpi_ssm_jump_to_state (ssm, IMAGING_CAPTURE);
