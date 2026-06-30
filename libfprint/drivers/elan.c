@@ -292,6 +292,11 @@ elan_process_frame_thirds (unsigned short *raw_frame,
   lvl3 = sorted[frame_size - 1];
   g_free (sorted);
 
+  /* Ensure levels are strictly monotonic to prevent division by zero */
+  lvl1 = MAX (lvl1, lvl0 + 1);
+  lvl2 = MAX (lvl2, lvl1 + 1);
+  lvl3 = MAX (lvl3, lvl2 + 1);
+
   unsigned short px;
 
   for (int i = 0; i < frame_size; i++)
