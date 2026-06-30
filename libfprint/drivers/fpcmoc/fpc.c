@@ -92,7 +92,7 @@ fpc_suspend_resume_cb (FpiUsbTransfer *transfer,
   if (ssm_state == FPC_CMD_SUSPENDED)
     {
       if (error)
-        fpi_ssm_mark_failed (transfer->ssm, error);
+        fpi_ssm_mark_failed (transfer->ssm, g_error_copy (error));
 
       fpi_device_suspend_complete (device, error);
       /* The resume handler continues to the next state! */
@@ -100,7 +100,7 @@ fpc_suspend_resume_cb (FpiUsbTransfer *transfer,
   else if (ssm_state == FPC_CMD_RESUME)
     {
       if (error)
-        fpi_ssm_mark_failed (transfer->ssm, error);
+        fpi_ssm_mark_failed (transfer->ssm, g_error_copy (error));
       else
         fpi_ssm_jump_to_state (transfer->ssm, FPC_CMD_GET_DATA);
 
