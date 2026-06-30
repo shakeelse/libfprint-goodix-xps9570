@@ -155,7 +155,8 @@ capture_reqs_cb (FpiUsbTransfer *transfer, FpDevice *device,
 }
 
 static int
-upektc_img_process_image_frame (unsigned char *image_buf, unsigned char *cmd_res)
+upektc_img_process_image_frame (unsigned char *image_buf, size_t image_buf_len,
+                                unsigned char *cmd_res, size_t cmd_res_len)
 {
   int offset = 8;
   int len = ((cmd_res[5] & 0x0f) << 8) | (cmd_res[6]);
@@ -168,6 +169,16 @@ upektc_img_process_image_frame (unsigned char *image_buf, unsigned char *cmd_res
     }
   if (cmd_res[7] == 0x20)
     len -= 4;
+
+  if (len <= 0 ||
+      (size_t) offset + (size_t) len > cmd_res_len ||
+      (size_t) len > image_buf_len)
+    {
+      fp_dbg ("Invalid image frame length %d (offset %d, source %zu, dest %zu)",
+              len, offset, cmd_res_len, image_buf_len);
+      return 0;
+    }
+
   memcpy (image_buf, cmd_res + offset, len);
 
   return len;
@@ -321,7 +332,8 @@ capture_read_data_cb (FpiUsbTransfer *transfer, FpDevice *device,
         case 0x24:
           self->image_size +=
             upektc_img_process_image_frame (self->image_bits + self->image_size,
-                                            data);
+                                            (self->expected_image_size * 2) - self->image_size,
+                                            data, MAX_RESPONSE_SIZE);
           fpi_ssm_jump_to_state (transfer->ssm,
                                  CAPTURE_ACK_FRAME);
           break;
@@ -330,8 +342,16 @@ capture_read_data_cb (FpiUsbTransfer *transfer, FpDevice *device,
         case 0x20:
           self->image_size +=
             upektc_img_process_image_frame (self->image_bits + self->image_size,
-                                            data);
-          BUG_ON (self->image_size != self->expected_image_size);
+                                            (self->expected_image_size * 2) - self->image_size,
+                                            data, MAX_RESPONSE_SIZE);
+          if (self->image_size != self->expected_image_size)
+            {
+              fp_err ("Image size mismatch: got %zu, expected %zu",
+                      self->image_size, self->expected_image_size);
+              fpi_ssm_mark_failed (transfer->ssm,
+                                   fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
+              return;
+            }
           fp_dbg ("Image size is %lu",
                   (gulong) self->image_size);
           img = fp_image_new (img_class->img_width, img_class->img_height);
