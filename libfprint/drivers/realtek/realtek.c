@@ -234,6 +234,16 @@ fp_accept_sample_cb (FpiDeviceRealtek *self,
             }
           return;
         }
+
+      if (in_status != FP_RTK_SUCCESS)
+        {
+          fpi_ssm_mark_failed (self->task_ssm,
+                               fpi_device_error_new_msg (FP_DEVICE_ERROR_DATA_INVALID,
+                                                         "Enrollment failed (status 0x%02x)",
+                                                         in_status));
+          return;
+        }
+
       fpi_ssm_next_state (self->task_ssm);
     }
 }
