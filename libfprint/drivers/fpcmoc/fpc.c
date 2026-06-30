@@ -635,14 +635,18 @@ fpc_print_from_data (FpiDeviceFpcMoc *self, fpc_fid_data_t *fid_data)
   FpPrint *print = NULL;
   GVariant *data;
   GVariant *uid;
+  guint32 identity_size;
   g_autofree gchar *userid = NULL;
 
-  userid = g_strndup ((gchar *) fid_data->identity, fid_data->identity_size);
+  identity_size = MIN (fid_data->identity_size, sizeof (fid_data->identity));
+  g_warn_if_fail (identity_size <= sizeof (fid_data->identity));
+
+  userid = g_strndup ((gchar *) fid_data->identity, identity_size);
   print = fp_print_new (FP_DEVICE (self));
 
   uid = g_variant_new_fixed_array (G_VARIANT_TYPE_BYTE,
                                    fid_data->identity,
-                                   fid_data->identity_size,
+                                   identity_size,
                                    1);
 
   data = g_variant_new ("(y@ay)",
