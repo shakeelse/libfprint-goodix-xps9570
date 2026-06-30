@@ -348,7 +348,11 @@ vfs301_extract_image (FpDeviceVfs301 *vfs, guint8 *output, int *output_height
   int last_line;
   int i;
 
-  g_assert (vfs->scanline_count >= 1);
+  if (vfs->scanline_count < 1 || scanlines == NULL)
+    {
+      *output_height = 0;
+      g_return_if_reached ();
+    }
 
   *output_height = 1;
   memcpy (output, scanlines, VFS301_FP_OUTPUT_WIDTH);
@@ -447,7 +451,8 @@ vfs301_proto_process_data (FpDeviceVfs301 *dev, int first_block, const guint8 *b
 
   if (first_block)
     {
-      g_assert (len >= VFS301_FP_FRAME_SIZE);
+      if (len < VFS301_FP_FRAME_SIZE)
+        g_return_val_if_reached (img_process_data (first_block, dev, buf, 0));
 
       /* Skip bytes until start_sequence is found */
       for (i = 0; i < VFS301_FP_FRAME_SIZE; i++, buf++, len--)
