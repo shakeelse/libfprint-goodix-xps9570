@@ -978,7 +978,13 @@ fp_verify_sm_run_state (FpiSsm *ssm, FpDevice *device)
   switch (fpi_ssm_get_cur_state (ssm))
     {
     case FP_RTK_VERIFY_GET_TEMPLATE:
-      g_assert (self->template_num > 0);
+      if (self->template_num <= 0)
+        {
+          fpi_ssm_mark_failed (ssm,
+                               fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                         "No templates enrolled"));
+          break;
+        }
 
       co_get_template.data_len[0] = GET_LEN_L (self->template_len * self->template_num);
       co_get_template.data_len[1] = GET_LEN_H (self->template_len * self->template_num);
@@ -1040,7 +1046,13 @@ fp_enroll_sm_run_state (FpiSsm *ssm, FpDevice *device)
   switch (fpi_ssm_get_cur_state (ssm))
     {
     case FP_RTK_ENROLL_GET_TEMPLATE:
-      g_assert (self->template_num > 0);
+      if (self->template_num <= 0)
+        {
+          fpi_ssm_mark_failed (ssm,
+                               fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                         "No templates enrolled"));
+          break;
+        }
 
       co_get_template.data_len[0] = GET_LEN_L (self->template_len * self->template_num);
       co_get_template.data_len[1] = GET_LEN_H (self->template_len * self->template_num);
@@ -1160,7 +1172,13 @@ fp_delete_sm_run_state (FpiSsm *ssm, FpDevice *device)
   switch (fpi_ssm_get_cur_state (ssm))
     {
     case FP_RTK_DELETE_GET_POS:
-      g_assert (self->template_num > 0);
+      if (self->template_num <= 0)
+        {
+          fpi_ssm_mark_failed (ssm,
+                               fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                         "No templates enrolled"));
+          break;
+        }
 
       co_get_template.data_len[0] = GET_LEN_L (self->template_len * self->template_num);
       co_get_template.data_len[1] = GET_LEN_H (self->template_len * self->template_num);
@@ -1352,7 +1370,21 @@ list_print (FpDevice *device)
   guint8 *cmd_buf = NULL;
 
   G_DEBUG_HERE ();
-  g_assert (self->template_num > 0);
+
+  if (self->template_num < 0)
+    {
+      fpi_device_list_complete (device, NULL,
+                                fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                          "Get template number failed!"));
+      return;
+    }
+
+  if (self->template_num == 0)
+    {
+      g_autoptr(GPtrArray) list_result = g_ptr_array_new_with_free_func (g_object_unref);
+      fpi_device_list_complete (device, g_steal_pointer (&list_result), NULL);
+      return;
+    }
 
   co_get_template.data_len[0] = GET_LEN_L (self->template_len * self->template_num);
   co_get_template.data_len[1] = GET_LEN_H (self->template_len * self->template_num);
