@@ -184,8 +184,8 @@ async_send_cb (FpiUsbTransfer *transfer, FpDevice *device,
         }
       else
         {
-          g_error_free (error);
           fp_dbg ("Ignoring send error: %s", error->message);
+          g_error_free (error);
         }
     }
   /* Reset ignore_error flag */
