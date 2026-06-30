@@ -1207,6 +1207,12 @@ init_run_state (FpiSsm *ssm, FpDevice *_dev)
 static void
 activate_initsm_complete (FpiSsm *ssm, FpDevice *dev, GError *error)
 {
+  FpiDeviceUru4000 *self = FPI_DEVICE_URU4000 (dev);
+
+  g_clear_pointer (&self->scanpwr_irq_timeout, g_source_destroy);
+  self->irq_cb_data = NULL;
+  self->irq_cb = NULL;
+
   fpi_image_device_activate_complete (FP_IMAGE_DEVICE (dev), error);
 }
 
