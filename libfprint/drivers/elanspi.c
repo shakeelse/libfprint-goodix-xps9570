@@ -23,9 +23,9 @@
 #include "drivers_api.h"
 #include "elanspi.h"
 
+#include <fcntl.h>
 #include <linux/hidraw.h>
 #include <sys/ioctl.h>
-#include <sys/fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <linux/types.h>
