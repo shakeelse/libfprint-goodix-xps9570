@@ -145,7 +145,7 @@ drivers_info = {
     'secugen': {},
 
     # SPI driver (non-optional if SPI is available)
-    'elanspi': { 'spi': true, 'helper': ['udev'], 'optional': not have_spi, 'endian_dependent': true },
+    'elanspi': { 'spi': true, 'helper': ['udev'], 'optional': not have_spi },
 
     # Virtual drivers (test-only, optional)
     'virtual_image': { 'virtual': true, 'helper': ['virtual'], 'optional': true },

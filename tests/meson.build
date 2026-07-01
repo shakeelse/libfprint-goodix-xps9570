@@ -39,7 +39,7 @@ drivers_tests = {
     'elan': {},
     'elan-cobo': {},
     'elanmoc': {},
-    'elanspi': {},
+    'elanspi': { 'timeout': 30 },
     'synaptics': {},
     'upektc_img': {},
     'upektc_img-tcs1s': {},
