@@ -3,6 +3,7 @@
 #include "glib.h"
 #include "drivers_api.h"
 #include "mafpmoc.h"
+#include "fpi-byte-writer.h"
 
 struct _FpiDeviceMafpmoc
 {
@@ -71,23 +72,6 @@ ma_protocol_crc16_calc ( uint8_t *data, uint32_t data_len, uint32_t start)
   return sum_s;
 }
 
-static void
-init_pack_header (ppack_header pheader, uint16_t frame_len)
-{
-  g_assert (pheader);
-
-  memset (pheader, 0, sizeof (*pheader));
-  pheader->head0 = 0xEF;
-  pheader->head1 = 0x01;
-  pheader->addr0 = 0xFF;
-  pheader->addr1 = 0xFF;
-  pheader->addr2 = 0xFF;
-  pheader->addr3 = 0xFF;
-  pheader->flag = (uint8_t) MAPF_PACK_CMD;
-  pheader->frame_len0 = (frame_len >> 8) & 0xff;
-  pheader->frame_len1 = frame_len & 0xff;
-}
-
 /* data tansfer:
  *      while cmd_len = 0, put flag(end or not) in data[0]
  */
@@ -98,27 +82,48 @@ ma_protocol_build_package (uint32_t       package_len,
                            const uint8_t *data,
                            uint32_t       data_len)
 {
-  g_autofree uint8_t *ppackage = g_new0 (uint8_t, package_len);
-  pack_header header;
+  g_autoptr(FpiByteWriter) writer = NULL;
+  uint8_t flag;
+  uint16_t frame_len;
+  uint16_t crc;
+  gboolean written;
 
-  init_pack_header (&header, package_len - PACKAGE_HEADER_SIZE);
+  writer = fpi_byte_writer_new_with_size (package_len, TRUE);
+
+  written = fpi_byte_writer_put_uint8 (writer, 0xEF);
+  written &= fpi_byte_writer_put_uint8 (writer, 0x01);
+  written &= fpi_byte_writer_put_uint8 (writer, 0xFF);
+  written &= fpi_byte_writer_put_uint8 (writer, 0xFF);
+  written &= fpi_byte_writer_put_uint8 (writer, 0xFF);
+  written &= fpi_byte_writer_put_uint8 (writer, 0xFF);
+
+  flag = (uint8_t) MAPF_PACK_CMD;
+
   if (!cmd_len && data_len)
-    header.flag = data[0];
+    flag = data[0];
 
-  memcpy (ppackage, &header, PACKAGE_HEADER_SIZE);
+  fpi_byte_writer_put_uint8 (writer, flag);
+
+  frame_len = package_len - PACKAGE_HEADER_SIZE;
+
+  written &= fpi_byte_writer_put_uint16_be (writer, frame_len);
 
   if (cmd_len)
-    ppackage[PACKAGE_HEADER_SIZE] = cmd & 0xFF;
+    written &= fpi_byte_writer_put_uint8 (writer, cmd);
 
   if (data_len)
-    memcpy (ppackage + PACKAGE_HEADER_SIZE + cmd_len, data + !cmd_len, data_len);
+    written &= fpi_byte_writer_put_data (writer, data + !cmd_len, data_len);
 
-  uint16_t crc = ma_protocol_crc16_calc (ppackage, PACKAGE_HEADER_SIZE + cmd_len + data_len, 6);
+  crc = ma_protocol_crc16_calc ((uint8_t *) writer->parent.data,
+                                PACKAGE_HEADER_SIZE + cmd_len + data_len,
+                                6);
 
-  ppackage[package_len - 2] = (crc >> 8) & 0xFF;
-  ppackage[package_len - 1] = crc & 0xFF;
+  written &= fpi_byte_writer_put_uint16_be (writer, crc);
 
-  return g_steal_pointer (&ppackage);
+  if (!written)
+    g_return_val_if_reached (NULL);
+
+  return fpi_byte_writer_free_and_get_data (g_steal_pointer (&writer));
 }
 
 static int
@@ -427,6 +432,8 @@ alloc_cmd_transfer (FpiDeviceMafpmoc *self,
   g_return_val_if_fail (data || data_len == 0, NULL);
 
   buffer = ma_protocol_build_package (total_len, cmd, cmd_len, data, data_len);
+  g_return_val_if_fail (buffer, NULL);
+
   fpi_usb_transfer_fill_bulk_full (transfer, MAFP_EP_BULK_OUT, buffer, total_len, g_free);
   return g_steal_pointer (&transfer);
 }
@@ -438,9 +445,21 @@ mafp_sensor_cmd (FpiDeviceMafpmoc *self,
                  uint8_t           data_len,
                  SynCmdMsgCallback callback)
 {
-  g_autoptr(FpiUsbTransfer) transfer = alloc_cmd_transfer (self, cmd, 1, data, data_len);
-  CommandData *cmd_data = g_new0 (CommandData, 1);
+  g_autoptr(FpiUsbTransfer) transfer = NULL;
+  CommandData *cmd_data = NULL;
 
+  if (!(transfer = alloc_cmd_transfer (self, cmd, 1, data, data_len)))
+    {
+      g_critical ("Failed to allocate command transfer");
+
+      if (callback)
+        callback (self, NULL, g_error_new (FP_DEVICE_ERROR, FP_DEVICE_ERROR_PROTO,
+                                           "Failed to allocate command transfer"));
+
+      return;
+    }
+
+  cmd_data = g_new0 (CommandData, 1);
   cmd_data->cmd = cmd;
   cmd_data->callback = callback;
   cmd_data->cmd_transfer = g_steal_pointer (&transfer);
