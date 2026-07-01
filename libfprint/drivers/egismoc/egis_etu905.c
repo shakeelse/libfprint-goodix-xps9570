@@ -1121,9 +1121,9 @@ egis_etu905_enroll_run_state (FpiSsm   *ssm,
       user_id = fpi_print_generate_user_id (enroll_print->print);
       fp_dbg ("New fingerprint ID: %s", user_id);
 
-      sid_data.reserve_para_1 = EGIS_ETU905_PARA_1_VALUE;
-      sid_data.reserve_para_2 = EGIS_ETU905_PARA_2_VALUE;
-      sid_data.reserve_para_3 = EGIS_ETU905_PARA_3_VALUE;
+      sid_data.reserve_para_1 = GUINT16_TO_LE (EGIS_ETU905_PARA_1_VALUE);
+      sid_data.reserve_para_2 = GUINT16_TO_LE (EGIS_ETU905_PARA_2_VALUE);
+      sid_data.reserve_para_3 = GUINT16_TO_LE (EGIS_ETU905_PARA_3_VALUE);
       memcpy (sid_data.reserve_para_4, user_id, MIN (EGIS_ETU905_FINGERPRINT_DATA_SIZE, strlen (user_id)));
       egis_etu905_set_print_data (enroll_print->print, (const gchar *) &sid_data.reserve_para_4, user_id);
       fpi_byte_writer_init (&writer);
