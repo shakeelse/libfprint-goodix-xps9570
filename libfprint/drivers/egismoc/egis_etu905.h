@@ -53,16 +53,6 @@ G_DECLARE_FINAL_TYPE (FpiDeviceEgisEtu905, fpi_device_egis_etu905, FPI, DEVICE_E
 #define EGIS_ETU905_PARA_2_VALUE 0
 #define EGIS_ETU905_PARA_3_VALUE 32
 
-#pragma pack(push, 1)
-typedef struct
-{
-  guchar  reserve_para_1;
-  gushort reserve_para_2;
-  gushort reserve_para_3;
-  guchar  reserve_para_4[EGIS_ETU905_PARA_4_SIZE];
-} EgismocSidData;
-#pragma pack(pop)
-
 /* standard prefixes for all read/writes */
 
 static guchar egis_etu905_write_prefix[] = {'E', 'G', 'I', 'S', 0x00, 0x00, 0x00, 0x01};

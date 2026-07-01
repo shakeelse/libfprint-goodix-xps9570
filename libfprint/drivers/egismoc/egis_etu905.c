@@ -1073,7 +1073,6 @@ egis_etu905_enroll_run_state (FpiSsm   *ssm,
                               FpDevice *device)
 {
   g_auto(FpiByteWriter) writer = {0};
-  EgismocSidData sid_data = {0};
   EnrollPrint *enroll_print = fpi_ssm_get_data (ssm);
   g_autofree guchar *payload = NULL;
   gsize payload_length = 0;
@@ -1121,20 +1120,21 @@ egis_etu905_enroll_run_state (FpiSsm   *ssm,
       user_id = fpi_print_generate_user_id (enroll_print->print);
       fp_dbg ("New fingerprint ID: %s", user_id);
 
-      sid_data.reserve_para_1 = GUINT16_TO_LE (EGIS_ETU905_PARA_1_VALUE);
-      sid_data.reserve_para_2 = GUINT16_TO_LE (EGIS_ETU905_PARA_2_VALUE);
-      sid_data.reserve_para_3 = GUINT16_TO_LE (EGIS_ETU905_PARA_3_VALUE);
-      memcpy (sid_data.reserve_para_4, user_id, MIN (EGIS_ETU905_FINGERPRINT_DATA_SIZE, strlen (user_id)));
-      egis_etu905_set_print_data (enroll_print->print, (const gchar *) &sid_data.reserve_para_4, user_id);
-      fpi_byte_writer_init (&writer);
-      if (!fpi_byte_writer_put_data (&writer, cmd_new_print_prefix_type2,
-                                     cmd_new_print_prefix_type2_len))
-        {
-          fpi_ssm_mark_failed (ssm, fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
-          break;
-        }
-      if (!fpi_byte_writer_put_data (&writer, (guint8 *) &sid_data,
-                                     sizeof (EgismocSidData)))
+      device_print_id = g_malloc0 (EGIS_ETU905_FINGERPRINT_DATA_SIZE);
+      memcpy (device_print_id, user_id,
+              MIN (EGIS_ETU905_FINGERPRINT_DATA_SIZE, strlen (user_id)));
+      egis_etu905_set_print_data (enroll_print->print, device_print_id, user_id);
+
+      fpi_byte_writer_init_with_size (&writer,
+                                      cmd_new_print_prefix_type2_len +
+                                      1 + 2 + 2 + EGIS_ETU905_PARA_4_SIZE,
+                                      TRUE);
+      if (!fpi_byte_writer_put_data_static (&writer, cmd_new_print_prefix_type2) ||
+          !fpi_byte_writer_put_uint8 (&writer, EGIS_ETU905_PARA_1_VALUE) ||
+          !fpi_byte_writer_put_uint16_le (&writer, EGIS_ETU905_PARA_2_VALUE) ||
+          !fpi_byte_writer_put_uint16_le (&writer, EGIS_ETU905_PARA_3_VALUE) ||
+          !fpi_byte_writer_put_data (&writer, (guint8 *) device_print_id,
+                                     EGIS_ETU905_FINGERPRINT_DATA_SIZE))
         {
           fpi_ssm_mark_failed (ssm, fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
           break;
