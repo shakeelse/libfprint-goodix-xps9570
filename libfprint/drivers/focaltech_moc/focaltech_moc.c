@@ -469,6 +469,8 @@ usb_claim_interface_probe (FpDevice *device, int claim, GError **error)
   int i;
 
   interfaces = g_usb_device_get_interfaces (fpi_device_get_usb_device (device), error);
+  if (interfaces == NULL)
+    return ret;
 
   for (i = 0; i < interfaces->len; i++)
     {
@@ -534,7 +536,7 @@ task_ssm_init_done (FpiSsm *ssm, FpDevice *device, GError *error)
   FpiDeviceFocaltechMoc *self = FPI_DEVICE_FOCALTECH_MOC (device);
 
   if (error)
-    usb_claim_interface_probe (device, 0, &error);
+    usb_claim_interface_probe (device, 0, NULL);
 
   fpi_device_open_complete (FP_DEVICE (self), g_steal_pointer (&error));
 }
