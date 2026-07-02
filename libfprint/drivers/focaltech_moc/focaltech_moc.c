@@ -460,17 +460,16 @@ get_g_usb_device_direction_des (GUsbDeviceDirection dir)
     }
 }
 
-static int
-usb_claim_interface_probe (FpDevice *device, int claim, GError **error)
+static gboolean
+usb_claim_interface_probe (FpDevice *device, gboolean claim, GError **error)
 {
   g_autoptr(GPtrArray) interfaces = NULL;
   FpiDeviceFocaltechMoc *self = FPI_DEVICE_FOCALTECH_MOC (device);
-  int ret = -1;
   int i;
 
   interfaces = g_usb_device_get_interfaces (fpi_device_get_usb_device (device), error);
   if (interfaces == NULL)
-    return ret;
+    return FALSE;
 
   for (i = 0; i < interfaces->len; i++)
     {
@@ -482,11 +481,9 @@ usb_claim_interface_probe (FpDevice *device, int claim, GError **error)
               g_usb_interface_get_subclass (cur_iface),
               g_usb_interface_get_protocol (cur_iface));
 
-      if (claim == 1)
+      if (claim)
         {
-          int j;
-
-          for (j = 0; j < endpoints->len; j++)
+          for (int j = 0; j < endpoints->len; j++)
             {
               GUsbEndpoint *endpoint = g_ptr_array_index (endpoints, j);
               GBytes *bytes = g_usb_endpoint_get_extra (endpoint);
@@ -513,21 +510,17 @@ usb_claim_interface_probe (FpDevice *device, int claim, GError **error)
           if (!g_usb_device_claim_interface (fpi_device_get_usb_device (device),
                                              g_usb_interface_get_number (cur_iface),
                                              0, error))
-            return ret;
+            return FALSE;
         }
       else if (!g_usb_device_release_interface (fpi_device_get_usb_device (device),
                                                 g_usb_interface_get_number (cur_iface),
                                                 0, error))
         {
-          return ret;
+          return FALSE;
         }
-
-
     }
 
-  ret = 0;
-
-  return ret;
+  return TRUE;
 }
 
 static void
@@ -536,7 +529,7 @@ task_ssm_init_done (FpiSsm *ssm, FpDevice *device, GError *error)
   FpiDeviceFocaltechMoc *self = FPI_DEVICE_FOCALTECH_MOC (device);
 
   if (error)
-    usb_claim_interface_probe (device, 0, NULL);
+    usb_claim_interface_probe (device, FALSE, NULL);
 
   fpi_device_open_complete (FP_DEVICE (self), g_steal_pointer (&error));
 }
@@ -651,8 +644,8 @@ dev_init_handler (FpiSsm *ssm, FpDevice *device)
 static void
 focaltech_moc_open (FpDevice *device)
 {
+  g_autoptr(GError) error = NULL;
   FpiDeviceFocaltechMoc *self = FPI_DEVICE_FOCALTECH_MOC (device);
-  GError *error = NULL;
 
   if (!g_usb_device_reset (fpi_device_get_usb_device (device), &error))
     {
@@ -660,7 +653,7 @@ focaltech_moc_open (FpDevice *device)
       return;
     }
 
-  if (usb_claim_interface_probe (device, 1, &error) != 0)
+  if (!usb_claim_interface_probe (device, TRUE, &error))
     {
       fpi_device_open_complete (FP_DEVICE (self), g_steal_pointer (&error));
       return;
@@ -676,12 +669,7 @@ task_ssm_exit_done (FpiSsm *ssm, FpDevice *device, GError *error)
   FpiDeviceFocaltechMoc *self = FPI_DEVICE_FOCALTECH_MOC (device);
 
   if (!error)
-    {
-      GError *local_error = NULL;
-
-      if (usb_claim_interface_probe (device, 0, &local_error) < 0)
-        g_propagate_error (&error, g_steal_pointer (&local_error));
-    }
+    usb_claim_interface_probe (device, FALSE, &error);
 
   fpi_device_close_complete (FP_DEVICE (self), error);
   self->task_ssm = NULL;
