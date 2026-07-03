@@ -1250,7 +1250,7 @@ fpi_device_open_complete (FpDevice *device, GError *error)
 void
 fpi_device_close_complete (FpDevice *device, GError *error)
 {
-  GError *nested_error = NULL;
+  g_autoptr(GError) nested_error = NULL;
   FpDevicePrivate *priv = fp_device_get_instance_private (device);
 
   g_return_if_fail (FP_IS_DEVICE (device));
@@ -1267,7 +1267,8 @@ fpi_device_close_complete (FpDevice *device, GError *error)
       if (!g_usb_device_close (priv->usb_device, &nested_error))
         {
           if (error == NULL)
-            error = nested_error;
+            error = g_steal_pointer (&nested_error);
+
           fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_ERROR, error);
           return;
         }
