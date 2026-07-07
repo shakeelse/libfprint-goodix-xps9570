@@ -221,7 +221,7 @@ fp_device_finalize (GObject *object)
 
   g_clear_pointer (&priv->temp_timeout, g_source_destroy);
 
-  g_slist_free_full (priv->sources, (GDestroyNotify) g_source_destroy);
+  g_clear_slist (&priv->sources, (GDestroyNotify) g_source_destroy);
 
   g_clear_pointer (&priv->current_idle_cancel_source, g_source_destroy);
   g_clear_pointer (&priv->current_task_idle_return_source, g_source_destroy);
