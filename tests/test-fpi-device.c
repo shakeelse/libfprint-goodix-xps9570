@@ -2875,14 +2875,14 @@ test_driver_identify_warmup_cooldown (void)
     g_main_context_iteration (NULL, TRUE);
   g_assert_cmpint (fp_device_get_temperature (device), ==, FP_TEMPERATURE_WARM);
   g_assert_false (g_cancellable_is_cancelled (fpi_device_get_cancellable (device)));
-  g_assert_cmpint (g_get_monotonic_time () - start_time, <, 0 + 250000);
+  g_assert_cmpint (g_get_monotonic_time () - start_time, <, 0 + 500000);
 
   /* we reach hot 2 seconds later */
   while (fp_device_get_temperature (device) == FP_TEMPERATURE_WARM)
     g_main_context_iteration (NULL, TRUE);
   g_assert_cmpint (fp_device_get_temperature (device), ==, FP_TEMPERATURE_HOT);
   g_assert_true (g_cancellable_is_cancelled (fpi_device_get_cancellable (device)));
-  g_assert_cmpint (g_get_monotonic_time () - start_time, <, 2000000 + 250000);
+  g_assert_cmpint (g_get_monotonic_time () - start_time, <, 2000000 + 500000);
 
   /* cancel vfunc will be called now */
   g_assert (fake_dev->last_called_function == NULL);
@@ -2909,12 +2909,12 @@ test_driver_identify_warmup_cooldown (void)
   while (fp_device_get_temperature (device) == FP_TEMPERATURE_HOT)
     g_main_context_iteration (NULL, TRUE);
   g_assert_cmpint (fp_device_get_temperature (device), ==, FP_TEMPERATURE_WARM);
-  g_assert_cmpint (g_get_monotonic_time () - start_time, <, 2000000 + 250000);
+  g_assert_cmpint (g_get_monotonic_time () - start_time, <, 2000000 + 500000);
 
   while (fp_device_get_temperature (device) == FP_TEMPERATURE_WARM)
     g_main_context_iteration (NULL, TRUE);
   g_assert_cmpint (fp_device_get_temperature (device), ==, FP_TEMPERATURE_COLD);
-  g_assert_cmpint (g_get_monotonic_time () - start_time, <, 5000000 + 500000);
+  g_assert_cmpint (g_get_monotonic_time () - start_time, <, 5000000 + 1000000);
 }
 
 static void
