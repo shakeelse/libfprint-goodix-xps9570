@@ -19,6 +19,7 @@
 
 #include "fp-device.h"
 #include "fp-enums.h"
+#include "fpi-print.h"
 #include <libfprint/fprint.h>
 
 #define FP_COMPONENT "device"
@@ -161,6 +162,34 @@ make_fake_nbis_print (FpDevice *device)
   fpi_print_set_type (enrolled_print, FPI_PRINT_NBIS);
 
   return enrolled_print;
+}
+
+static FpPrint *
+make_fake_nbis_print_filled (FpDevice *device,
+                             gint     *xvals,
+                             gint     *yvals,
+                             gint     *tvals,
+                             gint      nminutiae,
+                             gint      nentries)
+{
+  FpPrint *print = make_fake_nbis_print (device);
+
+  for (gint e = 0; e < nentries; e++)
+    {
+      struct xyt_struct *xyt = g_new0 (struct xyt_struct, 1);
+
+      xyt->nrows = nminutiae;
+      for (gint m = 0; m < nminutiae; m++)
+        {
+          xyt->xcol[m] = xvals[m];
+          xyt->ycol[m] = yvals[m];
+          xyt->thetacol[m] = tvals[m];
+        }
+
+      g_ptr_array_add (print->prints, xyt);
+    }
+
+  return print;
 }
 
 static FpPrint *
@@ -3754,6 +3783,130 @@ test_driver_retry_error_types (void)
   g_test_assert_expected_messages ();
 }
 
+static void
+test_fp_print_equal_same (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+
+  print_a = make_fake_print (device, g_variant_new_string ("test"));
+  print_b = make_fake_print (device, g_variant_new_string ("test"));
+
+  g_assert_true (fp_print_equal (print_a, print_a));
+  g_assert_true (fp_print_equal (print_b, print_b));
+  g_assert_true (fp_print_equal (print_a, print_b));
+}
+
+static void
+test_fp_print_equal_different (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+
+  print_a = make_fake_print (device, g_variant_new_string ("test"));
+  print_b = make_fake_print (device, g_variant_new_string ("other"));
+
+  g_assert_false (fp_print_equal (print_a, print_b));
+}
+
+static void
+test_fp_print_equal_nbis_empty (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+
+  print_a = make_fake_nbis_print (device);
+  print_b = make_fake_nbis_print (device);
+
+  g_assert_true (fp_print_equal (print_a, print_b));
+}
+
+static void
+test_fp_print_equal_nbis_one_empty (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+  gint xvals[] = { 10, 20 };
+  gint yvals[] = { 30, 40 };
+  gint tvals[] = { 50, 60 };
+
+  print_a = make_fake_nbis_print_filled (device, xvals, yvals, tvals, 2, 1);
+  print_b = make_fake_nbis_print (device);
+
+  g_assert_false (fp_print_equal (print_a, print_b));
+  g_assert_false (fp_print_equal (print_b, print_a));
+}
+
+static void
+test_fp_print_equal_nbis_equal (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+  gint xvals[] = { 10, 20 };
+  gint yvals[] = { 30, 40 };
+  gint tvals[] = { 50, 60 };
+
+  print_a = make_fake_nbis_print_filled (device, xvals, yvals, tvals, 2, 1);
+  print_b = make_fake_nbis_print_filled (device, xvals, yvals, tvals, 2, 1);
+
+  g_assert_true (fp_print_equal (print_a, print_b));
+}
+
+static void
+test_fp_print_equal_nbis_different (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+  gint xvals_a[] = { 10, 20 };
+  gint yvals_a[] = { 30, 40 };
+  gint tvals_a[] = { 50, 60 };
+  gint xvals_b[] = { 99, 88 };
+  gint yvals_b[] = { 77, 66 };
+  gint tvals_b[] = { 55, 44 };
+
+  print_a = make_fake_nbis_print_filled (device, xvals_a, yvals_a, tvals_a, 2, 1);
+  print_b = make_fake_nbis_print_filled (device, xvals_b, yvals_b, tvals_b, 2, 1);
+
+  g_assert_false (fp_print_equal (print_a, print_b));
+}
+
+static void
+test_fp_print_equal_nbis_different_lengths (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+  gint xvals[] = { 10, 20 };
+  gint yvals[] = { 30, 40 };
+  gint tvals[] = { 50, 60 };
+
+  print_a = make_fake_nbis_print_filled (device, xvals, yvals, tvals, 2, 5);
+  print_b = make_fake_nbis_print_filled (device, xvals, yvals, tvals, 2, 1);
+
+  g_assert_false (fp_print_equal (print_a, print_b));
+  g_assert_false (fp_print_equal (print_b, print_a));
+}
+
+static void
+test_fp_print_equal_different_types (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+
+  print_a = make_fake_print (device, g_variant_new_string ("test"));
+  print_b = make_fake_nbis_print (device);
+
+  g_assert_false (fp_print_equal (print_a, print_b));
+  g_assert_false (fp_print_equal (print_b, print_a));
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -3876,6 +4029,17 @@ main (int argc, char *argv[])
 
   g_test_add_func ("/driver/error_types", test_driver_error_types);
   g_test_add_func ("/driver/retry_error_types", test_driver_retry_error_types);
+
+  g_test_add_func ("/print/equal/same", test_fp_print_equal_same);
+  g_test_add_func ("/print/equal/different", test_fp_print_equal_different);
+  g_test_add_func ("/print/equal/nbis_empty", test_fp_print_equal_nbis_empty);
+  g_test_add_func ("/print/equal/nbis_one_empty", test_fp_print_equal_nbis_one_empty);
+  g_test_add_func ("/print/equal/nbis_equal", test_fp_print_equal_nbis_equal);
+  g_test_add_func ("/print/equal/nbis_different", test_fp_print_equal_nbis_different);
+  g_test_add_func ("/print/equal/nbis_different_lengths",
+                   test_fp_print_equal_nbis_different_lengths);
+  g_test_add_func ("/print/equal/different_types",
+                   test_fp_print_equal_different_types);
 
   return g_test_run ();
 }
