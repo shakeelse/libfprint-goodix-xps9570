@@ -596,6 +596,9 @@ fp_print_equal (FpPrint *self, FpPrint *other)
   g_return_val_if_fail (self->type != FPI_PRINT_UNDEFINED, FALSE);
   g_return_val_if_fail (other->type != FPI_PRINT_UNDEFINED, FALSE);
 
+  if (self == other)
+    return TRUE;
+
   if (self->type != other->type)
     return FALSE;
 
