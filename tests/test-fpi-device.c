@@ -2185,7 +2185,7 @@ test_driver_identify (void)
   FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
   FpPrint *expected_matched;
 
-  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, 499));
+  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, prints->len));
   fp_print_set_description (expected_matched, "fake-verified");
 
   G_GNUC_BEGIN_IGNORE_DEPRECATIONS
@@ -2260,7 +2260,7 @@ test_driver_identify_retry (void)
   FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
   FpPrint *expected_matched;
 
-  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, 499));
+  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, prints->len));
   fp_print_set_description (expected_matched, "fake-verified");
 
   G_GNUC_BEGIN_IGNORE_DEPRECATIONS
@@ -2297,7 +2297,7 @@ test_driver_identify_error (void)
   FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
   FpPrint *expected_matched;
 
-  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, 499));
+  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, prints->len));
   fp_print_set_description (expected_matched, "fake-verified");
 
   G_GNUC_BEGIN_IGNORE_DEPRECATIONS
@@ -2514,7 +2514,7 @@ test_driver_identify_suspend_continues (void)
   dev_class->identify = fake_device_stub_identify;
 
   prints = make_fake_prints_gallery (device, 500);
-  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, 499));
+  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, prints->len));
   fp_print_set_description (expected_matched, "fake-verified");
 
   match_data->gallery = prints;
@@ -2580,7 +2580,7 @@ test_driver_identify_suspend_succeeds (void)
   dev_class->identify = fake_device_stub_identify;
 
   prints = make_fake_prints_gallery (device, 500);
-  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, 499));
+  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, prints->len));
   fp_print_set_description (expected_matched, "fake-verified");
 
   match_data->gallery = prints;
@@ -2642,7 +2642,7 @@ test_driver_identify_suspend_busy_error (void)
   dev_class->identify = fake_device_stub_identify;
 
   prints = make_fake_prints_gallery (device, 500);
-  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, 499));
+  expected_matched = g_ptr_array_index (prints, g_random_int_range (0, prints->len));
   fp_print_set_description (expected_matched, "fake-verified");
 
   match_data->gallery = prints;
