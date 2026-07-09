@@ -1540,6 +1540,43 @@ test_driver_verify_error (void)
 }
 
 static void
+test_driver_verify_mismatched_scanned_print (void)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(FpAutoCloseDevice) device = auto_close_fake_device_new ();
+  g_autoptr(FpPrint) enrolled_print = NULL;
+  g_autoptr(FpPrint) out_print = NULL;
+  g_autoptr(MatchCbData) match_data = g_new0 (MatchCbData, 1);
+  FpDeviceClass *dev_class = FP_DEVICE_GET_CLASS (device);
+  FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+  gboolean match;
+
+  enrolled_print = make_fake_print_reffed (device, g_variant_new_uint64 (3));
+  fake_dev->ret_print = make_fake_print (device, g_variant_new_uint64 (7));
+  g_object_add_weak_pointer (G_OBJECT (fake_dev->ret_print),
+                             (gpointer) (&fake_dev->ret_print));
+  fake_dev->ret_result = FPI_MATCH_SUCCESS;
+
+  g_test_expect_message (G_LOG_DOMAIN, G_LOG_LEVEL_WARNING,
+                         "*Driver reported a match providing a scanned print*");
+
+  g_assert_true (fp_device_verify_sync (device, enrolled_print, NULL,
+                                        test_driver_match_cb, match_data,
+                                        &match, &out_print, &error));
+
+  g_test_assert_expected_messages ();
+
+  g_assert (fake_dev->last_called_function == dev_class->verify);
+  g_assert_no_error (error);
+
+  g_assert_true (match_data->called);
+  g_assert_nonnull (match_data->match);
+  g_assert_null (out_print);
+  g_assert_true (match);
+  g_assert_null (fake_dev->ret_print);
+}
+
+static void
 fake_device_verify_immediate_complete (FpDevice *device)
 {
   fpi_device_verify_complete (device, NULL);
@@ -2195,7 +2232,9 @@ test_driver_identify (void)
 
   match_data->gallery = prints;
 
-  fake_dev->ret_print = make_fake_print (device, NULL);
+  fake_dev->ret_print = make_fake_print (device,
+                                         g_variant_new_uint64 (
+                                           g_random_int_range (0, prints->len)));
   g_assert_true (fp_device_identify_sync (device, prints, NULL,
                                           test_driver_match_cb, match_data,
                                           &matched_print, &print, &error));
@@ -2519,7 +2558,9 @@ test_driver_identify_suspend_continues (void)
 
   match_data->gallery = prints;
 
-  fake_dev->ret_print = make_fake_print (device, NULL);
+  fake_dev->ret_print = make_fake_print (device,
+                                         g_variant_new_uint64 (
+                                           g_random_int_range (0, prints->len)));
 
   g_assert_true (fp_device_open_sync (device, NULL, NULL));
 
@@ -2587,7 +2628,9 @@ test_driver_identify_suspend_succeeds (void)
 
   g_assert_true (fp_device_open_sync (device, NULL, NULL));
 
-  fake_dev->ret_print = make_fake_print (device, NULL);
+  fake_dev->ret_print = make_fake_print (device,
+                                         g_variant_new_uint64 (
+                                           g_random_int_range (0, prints->len)));
   fp_device_identify (device, prints, NULL,
                       test_driver_match_cb, match_data, NULL,
                       (GAsyncReadyCallback) test_driver_identify_cb, identify_data);
@@ -2806,6 +2849,52 @@ test_driver_identify_warmup_cooldown (void)
     g_main_context_iteration (NULL, TRUE);
   g_assert_cmpint (fp_device_get_temperature (device), ==, FP_TEMPERATURE_COLD);
   g_assert_cmpint (g_get_monotonic_time () - start_time, <, 5000000 + 500000);
+}
+
+static void
+test_driver_identify_mismatched_scanned_print (void)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(FpPrint) print = NULL;
+  g_autoptr(FpPrint) matched_print = NULL;
+  g_autoptr(FpAutoCloseDevice) device = auto_close_fake_device_new ();
+  g_autoptr(GPtrArray) prints = make_fake_prints_gallery (device, 500);
+  g_autoptr(MatchCbData) match_data = g_new0 (MatchCbData, 1);
+  FpDeviceClass *dev_class = FP_DEVICE_GET_CLASS (device);
+  FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+  FpPrint *expected_matched;
+
+  expected_matched = g_ptr_array_index (prints, 0);
+  fp_print_set_description (expected_matched, "fake-verified");
+
+  match_data->gallery = prints;
+
+  fake_dev->ret_match = expected_matched;
+  fake_dev->ret_print = make_fake_print (device, g_variant_new_string ("no-match"));
+  g_object_add_weak_pointer (G_OBJECT (fake_dev->ret_print),
+                             (gpointer) (&fake_dev->ret_print));
+
+  g_test_expect_message (G_LOG_DOMAIN, G_LOG_LEVEL_WARNING,
+                         "*Driver reported a match providing a scanned print "
+                         "that is not matching any in the gallery.*");
+
+  g_assert_true (fp_device_identify_sync (device, prints, NULL,
+                                          test_driver_match_cb, match_data,
+                                          &matched_print, &print, &error));
+
+  g_test_assert_expected_messages ();
+
+  g_assert_true (match_data->called);
+  g_assert_nonnull (match_data->match);
+  g_assert_true (match_data->match == matched_print);
+  g_assert_null (match_data->print);
+
+  g_assert (fake_dev->last_called_function == dev_class->identify);
+  g_assert_no_error (error);
+
+  g_assert_null (print);
+  g_assert (expected_matched == matched_print);
+  g_assert_null (fake_dev->ret_print);
 }
 
 static void
@@ -4137,6 +4226,8 @@ main (int argc, char *argv[])
   g_test_add_func ("/driver/verify/report_no_cb", test_driver_verify_report_no_callback);
   g_test_add_func ("/driver/verify/not_reported", test_driver_verify_not_reported);
   g_test_add_func ("/driver/verify/complete_retry", test_driver_verify_complete_retry);
+  g_test_add_func ("/driver/verify/mismatched_scanned_print",
+                   test_driver_verify_mismatched_scanned_print);
   g_test_add_func ("/driver/verify/via-identify", test_driver_verify_via_identify);
   g_test_add_func ("/driver/verify/via-identify/fail", test_driver_verify_via_identify_fail);
   g_test_add_func ("/driver/verify/via-identify/retry", test_driver_verify_via_identify_retry);
@@ -4152,6 +4243,8 @@ main (int argc, char *argv[])
   g_test_add_func ("/driver/identify/not_reported", test_driver_identify_not_reported);
   g_test_add_func ("/driver/identify/complete_retry", test_driver_identify_complete_retry);
   g_test_add_func ("/driver/identify/report_no_cb", test_driver_identify_report_no_callback);
+  g_test_add_func ("/driver/identify/mismatched_scanned_print",
+                   test_driver_identify_mismatched_scanned_print);
 
   g_test_add_func ("/driver/identify/suspend_continues", test_driver_identify_suspend_continues);
   g_test_add_func ("/driver/identify/suspend_succeeds", test_driver_identify_suspend_succeeds);

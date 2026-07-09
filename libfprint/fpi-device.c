@@ -2062,6 +2062,12 @@ fpi_device_verify_report (FpDevice      *device,
         {
           fpi_device_get_verify_data (device, &data->match);
           g_object_ref (data->match);
+
+          if (print && !fpi_print_match (print, data->match))
+            {
+              g_warning ("Driver reported a match providing a scanned print that is not matching it.");
+              g_clear_object (&print);
+            }
         }
 
       data->print = g_steal_pointer (&print);
@@ -2150,6 +2156,14 @@ fpi_device_identify_report (FpDevice *device,
     }
   else
     {
+      if (match && print &&
+          !g_ptr_array_find_with_equal_func (data->gallery, print,
+                                             (GEqualFunc) fpi_print_match, NULL))
+        {
+          g_warning ("Driver reported a match providing a scanned print that is not matching any in the gallery.");
+          g_clear_object (&print);
+        }
+
       if (match)
         data->match = g_steal_pointer (&match);
 
