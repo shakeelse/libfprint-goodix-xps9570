@@ -35,6 +35,10 @@ void     fpi_print_add_print (FpPrint *print,
 
 void     fpi_print_set_type (FpPrint     *print,
                              FpiPrintType type);
+
+gboolean fpi_print_match (FpPrint *self,
+                          FpPrint *other);
+
 void     fpi_print_set_device_stored (FpPrint *print,
                                       gboolean device_stored);
 

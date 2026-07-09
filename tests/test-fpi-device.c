@@ -3907,6 +3907,170 @@ test_fp_print_equal_different_types (void)
   g_assert_false (fp_print_equal (print_b, print_a));
 }
 
+static void
+test_fpi_print_match_same (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+
+  print_a = make_fake_print (device, g_variant_new_string ("test"));
+  print_b = make_fake_print (device, g_variant_new_string ("test"));
+
+  g_assert_true (fpi_print_match (print_a, print_b));
+  g_assert_true (fpi_print_match (print_a, print_a));
+  g_assert_true (fpi_print_match (print_b, print_b));
+}
+
+static void
+test_fpi_print_match_different (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+
+  print_a = make_fake_print (device, g_variant_new_string ("test"));
+  print_b = make_fake_print (device, g_variant_new_string ("other"));
+
+  g_assert_false (fpi_print_match (print_a, print_b));
+}
+
+static void
+test_fpi_print_match_nbis_empty (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+
+  print_a = make_fake_nbis_print (device);
+  print_b = make_fake_nbis_print (device);
+
+  g_assert_true (fpi_print_match (print_a, print_b));
+  g_assert_true (fpi_print_match (print_a, print_a));
+  g_assert_true (fpi_print_match (print_b, print_b));
+}
+
+static void
+test_fpi_print_match_nbis_one_empty (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+  gint xvals[] = { 10, 20 };
+  gint yvals[] = { 30, 40 };
+  gint tvals[] = { 50, 60 };
+
+  print_a = make_fake_nbis_print_filled (device, xvals, yvals, tvals, 2, 1);
+  print_b = make_fake_nbis_print (device);
+
+  g_assert_false (fpi_print_match (print_a, print_b));
+  g_assert_false (fpi_print_match (print_b, print_a));
+}
+
+static void
+test_fpi_print_match_nbis_equal (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+  gint xvals[] = { 10, 20 };
+  gint yvals[] = { 30, 40 };
+  gint tvals[] = { 50, 60 };
+
+  print_a = make_fake_nbis_print_filled (device, xvals, yvals, tvals, 2, 1);
+  print_b = make_fake_nbis_print_filled (device, xvals, yvals, tvals, 2, 1);
+
+  g_assert_true (fpi_print_match (print_a, print_b));
+}
+
+static void
+test_fpi_print_match_nbis_different (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+  gint xvals_a[] = { 10, 20 };
+  gint yvals_a[] = { 30, 40 };
+  gint tvals_a[] = { 50, 60 };
+  gint xvals_b[] = { 99, 88 };
+  gint yvals_b[] = { 77, 66 };
+  gint tvals_b[] = { 55, 44 };
+
+  print_a = make_fake_nbis_print_filled (device, xvals_a, yvals_a, tvals_a, 2, 1);
+  print_b = make_fake_nbis_print_filled (device, xvals_b, yvals_b, tvals_b, 2, 1);
+
+  g_assert_false (fpi_print_match (print_a, print_b));
+}
+
+static void
+test_fpi_print_match_nbis_template_scanned (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  gint xvals[] = { 10, 20 };
+  gint yvals[] = { 30, 40 };
+  gint tvals[] = { 50, 60 };
+  g_autoptr(FpPrint) template = NULL;
+  g_autoptr(FpPrint) scanned = NULL;
+
+  template = make_fake_nbis_print_filled (device, xvals, yvals, tvals, 2, 5);
+  scanned = make_fake_nbis_print_filled (device, xvals, yvals, tvals, 2, 1);
+
+  g_assert_true (fpi_print_match (template, scanned));
+  g_assert_true (fpi_print_match (scanned, template));
+}
+
+static void
+test_fpi_print_match_nbis_template_scanned_no_match (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  gint xvals_t[] = { 10, 20 };
+  gint yvals_t[] = { 30, 40 };
+  gint tvals_t[] = { 50, 60 };
+  gint xvals_s[] = { 99, 88 };
+  gint yvals_s[] = { 77, 66 };
+  gint tvals_s[] = { 55, 44 };
+  g_autoptr(FpPrint) template = NULL;
+  g_autoptr(FpPrint) scanned = NULL;
+
+  template = make_fake_nbis_print_filled (device, xvals_t, yvals_t, tvals_t, 2, 5);
+  scanned = make_fake_nbis_print_filled (device, xvals_s, yvals_s, tvals_s, 2, 1);
+
+  g_assert_false (fpi_print_match (template, scanned));
+  g_assert_false (fpi_print_match (scanned, template));
+}
+
+static void
+test_fpi_print_match_nbis_match_any_position (void)
+{
+  g_autoptr(FpDevice) device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
+  g_autoptr(FpPrint) print_a = NULL;
+  g_autoptr(FpPrint) print_b = NULL;
+  gint xvals_a[] = { 10, 20 };
+  gint yvals_a[] = { 30, 40 };
+  gint tvals_a[] = { 50, 60 };
+  gint xvals_b[] = { 99, 88 };
+  gint yvals_b[] = { 77, 66 };
+  gint tvals_b[] = { 55, 44 };
+  gint xvals_match[] = { 10, 20 };
+  gint yvals_match[] = { 30, 40 };
+  gint tvals_match[] = { 50, 60 };
+  struct xyt_struct *xyt_match = g_new0 (struct xyt_struct, 1);
+
+  print_a = make_fake_nbis_print_filled (device, xvals_a, yvals_a, tvals_a, 2, 1);
+  print_b = make_fake_nbis_print_filled (device, xvals_b, yvals_b, tvals_b, 2, 1);
+
+  xyt_match->nrows = 2;
+  xyt_match->xcol[0] = xvals_match[0];
+  xyt_match->ycol[0] = yvals_match[0];
+  xyt_match->thetacol[0] = tvals_match[0];
+  xyt_match->xcol[1] = xvals_match[1];
+  xyt_match->ycol[1] = yvals_match[1];
+  xyt_match->thetacol[1] = tvals_match[1];
+  g_ptr_array_add (print_b->prints, xyt_match);
+
+  g_assert_true (fpi_print_match (print_a, print_b));
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -4040,6 +4204,18 @@ main (int argc, char *argv[])
                    test_fp_print_equal_nbis_different_lengths);
   g_test_add_func ("/print/equal/different_types",
                    test_fp_print_equal_different_types);
+
+  g_test_add_func ("/print/match/same", test_fpi_print_match_same);
+  g_test_add_func ("/print/match/different", test_fpi_print_match_different);
+  g_test_add_func ("/print/match/nbis_empty", test_fpi_print_match_nbis_empty);
+  g_test_add_func ("/print/match/nbis_one_empty", test_fpi_print_match_nbis_one_empty);
+  g_test_add_func ("/print/match/nbis_equal", test_fpi_print_match_nbis_equal);
+  g_test_add_func ("/print/match/nbis_different", test_fpi_print_match_nbis_different);
+  g_test_add_func ("/print/match/nbis_template_scanned", test_fpi_print_match_nbis_template_scanned);
+  g_test_add_func ("/print/match/nbis_template_scanned_no_match",
+                   test_fpi_print_match_nbis_template_scanned_no_match);
+  g_test_add_func ("/print/match/nbis_match_any_position",
+                   test_fpi_print_match_nbis_match_any_position);
 
   return g_test_run ();
 }

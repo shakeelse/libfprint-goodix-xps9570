@@ -363,3 +363,68 @@ fpi_print_fill_from_user_id (FpPrint *print, const char *user_id)
 
   return FALSE;
 }
+
+/**
+ * fpi_print_match:
+ * @self: First #FpPrint
+ * @other: Second #FpPrint
+ *
+ * Tests whether the prints are matching.
+ * This is like fp_print_equal() for %FPI_PRINT_RAW prints,
+ * while for %FPI_PRINT_NBIS prints ensures that at least one
+ * sub-print minutiae matches.
+ *
+ * Returns: %TRUE if the prints are matching
+ */
+gboolean
+fpi_print_match (FpPrint *self, FpPrint *other)
+{
+  g_return_val_if_fail (FP_IS_PRINT (self), FALSE);
+  g_return_val_if_fail (FP_IS_PRINT (other), FALSE);
+  g_return_val_if_fail (self->type != FPI_PRINT_UNDEFINED, FALSE);
+  g_return_val_if_fail (other->type != FPI_PRINT_UNDEFINED, FALSE);
+
+  if (self == other)
+    return TRUE;
+
+  switch (self->type)
+    {
+    case FPI_PRINT_RAW:
+      return fp_print_equal (self, other);
+
+    case FPI_PRINT_NBIS:
+      {
+        if (other->type != FPI_PRINT_NBIS)
+          return FALSE;
+
+        if (g_strcmp0 (self->driver, other->driver) != 0)
+          return FALSE;
+
+        if (g_strcmp0 (self->device_id, other->device_id) != 0)
+          return FALSE;
+
+        if (self->prints->len == 0 || other->prints->len == 0)
+          return self->prints->len == other->prints->len;
+
+        for (guint i = 0; i < self->prints->len; i++)
+          {
+            struct xyt_struct *a = g_ptr_array_index (self->prints, i);
+
+            for (guint j = 0; j < other->prints->len; j++)
+              {
+                struct xyt_struct *b = g_ptr_array_index (other->prints, j);
+
+                if (memcmp (a, b, sizeof (struct xyt_struct)) == 0)
+                  return TRUE;
+              }
+          }
+
+        return FALSE;
+      }
+
+    case FPI_PRINT_UNDEFINED:
+      g_assert_not_reached ();
+    }
+
+  g_return_val_if_reached (FALSE);
+}
