@@ -54,6 +54,26 @@ fp_device_get_instance_private (FpDevice *self)
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (GModule, g_module_close)
 
+static char *
+error_to_string (GError * error)
+{
+  g_autofree char *domain_str = NULL;
+
+  if (!error)
+    return g_strdup ("none");
+
+  if (error->domain == FP_DEVICE_RETRY)
+    domain_str = g_enum_to_string (FP_TYPE_DEVICE_RETRY, error->code);
+  else if (error->domain == FP_DEVICE_ERROR)
+    domain_str = g_enum_to_string (FP_TYPE_DEVICE_ERROR, error->code);
+  else if (error->domain == G_IO_ERROR)
+    domain_str = g_enum_to_string (g_io_error_enum_get_type (), error->code);
+  else
+    domain_str = g_strdup_printf ("UNKNOWN_ERROR_%u", error->domain);
+
+  return g_strdup_printf ("[%s] %s", domain_str, error->message);
+}
+
 /**
  * fpi_device_emulation_mode_enabled:
  * @device: The #FpDevice to check
@@ -790,11 +810,14 @@ fpi_device_action_error (FpDevice *device,
 
   if (error != NULL)
     {
-      g_autofree char *action_str = NULL;
+      if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+        {
+          g_autofree char *error_str = error_to_string (error);
+          g_autofree char *action_str = g_enum_to_string (FPI_TYPE_DEVICE_ACTION, priv->current_action);
 
-      action_str = g_enum_to_string (FPI_TYPE_DEVICE_ACTION, priv->current_action);
-      g_debug ("Device reported generic error (%s) during action; action was: %s",
-               error->message, action_str);
+          g_debug ("Device reported generic error (%s) during action; action was: %s",
+                   error_str, action_str);
+        }
     }
   else
     {
@@ -1007,17 +1030,18 @@ typedef struct _FpDeviceTaskReturnData
 static gboolean
 fp_device_task_return_in_idle_cb (gpointer user_data)
 {
-  FpDeviceTaskReturnData *data = user_data;
-  FpDevicePrivate *priv = fp_device_get_instance_private (data->device);
-  g_autofree char *action_str = NULL;
-  FpiDeviceAction action;
-
   g_autoptr(GTask) task = NULL;
   g_autoptr(GError) cancellation_reason = NULL;
+  FpDeviceTaskReturnData *data = user_data;
+  FpDevicePrivate *priv = fp_device_get_instance_private (data->device);
+  FpiDeviceAction action;
 
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *action_str = g_enum_to_string (FPI_TYPE_DEVICE_ACTION, priv->current_action);
 
-  action_str = g_enum_to_string (FPI_TYPE_DEVICE_ACTION, priv->current_action);
-  g_debug ("Completing action %s in idle!", action_str);
+      g_debug ("Completing action %s in idle!", action_str);
+    }
 
   task = g_steal_pointer (&priv->current_task);
   action = priv->current_action;
@@ -1185,7 +1209,13 @@ fpi_device_probe_complete (FpDevice    *device,
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_PROBE);
 
-  g_debug ("Device reported probe completion");
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported probe completion (ID: %s, name: %s, error: %s)",
+               device_id, device_name, error_str);
+    }
 
   clear_device_cancel_action (device);
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
@@ -1228,7 +1258,12 @@ fpi_device_open_complete (FpDevice *device, GError *error)
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_OPEN);
 
-  g_debug ("Device reported open completion");
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported open completion (error: %s)", error_str);
+    }
 
   clear_device_cancel_action (device);
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
@@ -1256,7 +1291,12 @@ fpi_device_close_complete (FpDevice *device, GError *error)
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_CLOSE);
 
-  g_debug ("Device reported close completion");
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported close completion (error: %s)", error_str);
+    }
 
   clear_device_cancel_action (device);
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
@@ -1309,7 +1349,13 @@ fpi_device_enroll_complete (FpDevice *device, FpPrint *print, GError *error)
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_ENROLL);
 
-  g_debug ("Device reported enroll completion");
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported enroll completion (print: %p, error: %s)",
+               print, error_str);
+    }
 
   clear_device_cancel_action (device);
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
@@ -1319,7 +1365,6 @@ fpi_device_enroll_complete (FpDevice *device, FpPrint *print, GError *error)
       if (FP_IS_PRINT (print))
         {
           FpiPrintType print_type;
-          g_autofree char *finger_str = NULL;
 
           g_object_get (print, "fpi-type", &print_type, NULL);
           if (print_type == FPI_PRINT_UNDEFINED)
@@ -1333,8 +1378,12 @@ fpi_device_enroll_complete (FpDevice *device, FpPrint *print, GError *error)
               return;
             }
 
-          finger_str = g_enum_to_string (FP_TYPE_FINGER, fp_print_get_finger (print));
-          g_debug ("Print for finger %s enrolled", finger_str);
+          if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+            {
+              g_autofree char *finger_str = g_enum_to_string (FP_TYPE_FINGER, fp_print_get_finger (print));
+
+              g_debug ("Print for finger %s enrolled", finger_str);
+            }
 
           fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_OBJECT, print);
         }
@@ -1381,7 +1430,12 @@ fpi_device_verify_complete (FpDevice *device,
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_VERIFY);
 
-  g_debug ("Device reported verify completion");
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported verify completion (error: %s)", error_str);
+    }
 
   data = g_task_get_task_data (priv->current_task);
 
@@ -1446,7 +1500,12 @@ fpi_device_identify_complete (FpDevice *device,
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_IDENTIFY);
 
-  g_debug ("Device reported identify completion");
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported identify completion (error: %s)", error_str);
+    }
 
   data = g_task_get_task_data (priv->current_task);
 
@@ -1505,7 +1564,13 @@ fpi_device_capture_complete (FpDevice *device,
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_CAPTURE);
 
-  g_debug ("Device reported capture completion");
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported capture completion (image: %p, error: %s)",
+               image, error_str);
+    }
 
   clear_device_cancel_action (device);
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
@@ -1551,7 +1616,12 @@ fpi_device_delete_complete (FpDevice *device,
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_DELETE);
 
-  g_debug ("Device reported deletion completion");
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported delete completion (error: %s)", error_str);
+    }
 
   clear_device_cancel_action (device);
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
@@ -1586,7 +1656,13 @@ fpi_device_list_complete (FpDevice  *device,
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_LIST);
 
-  g_debug ("Device reported listing completion");
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported listing completion (prints: %ld, error: %s)",
+               prints ? (long) prints->len : -1, error_str);
+    }
 
   clear_device_cancel_action (device);
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
@@ -1867,6 +1943,13 @@ fpi_device_suspend_complete (FpDevice *device,
   g_return_if_fail (priv->suspend_resume_task);
   g_return_if_fail (priv->suspend_error == NULL);
 
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported suspend completion (error: %s)", error_str);
+    }
+
   priv->suspend_error = g_steal_pointer (&error);
   priv->is_suspended = TRUE;
 
@@ -1910,6 +1993,13 @@ fpi_device_resume_complete (FpDevice *device,
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->suspend_resume_task);
 
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported resume completion (error: %s)", error_str);
+    }
+
   priv->is_suspended = FALSE;
   fpi_device_configure_wakeup (device, FALSE);
 
@@ -1937,7 +2027,12 @@ fpi_device_clear_storage_complete (FpDevice *device,
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_CLEAR_STORAGE);
 
-  g_debug ("Device reported deletion completion");
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported clear storage completion (error: %s)", error_str);
+    }
 
   clear_device_cancel_action (device);
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
@@ -2026,7 +2121,14 @@ fpi_device_verify_report (FpDevice      *device,
 
   data->result_reported = TRUE;
 
-  g_debug ("Device reported verify result");
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *result_str = g_enum_to_string (FPI_TYPE_MATCH_RESULT, result);
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported verify result (result: %s, print: %p, error: %s)",
+               result_str, print, error_str);
+    }
 
   if (print)
     print = g_object_ref_sink (print);
@@ -2124,13 +2226,19 @@ fpi_device_identify_report (FpDevice *device,
   if (print)
     print = g_object_ref_sink (print);
 
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *error_str = error_to_string (error);
+
+      g_debug ("Device reported identify result (match: %p, print: %p, error: %s)",
+               match, print, error_str);
+    }
+
   if (match && !g_ptr_array_find (data->gallery, match, NULL))
     {
       g_warning ("Driver reported a match to a print that was not in the gallery, ignoring match.");
       g_clear_object (&match);
     }
-
-  g_debug ("Device reported identify result");
 
   if (error)
     {
@@ -2190,13 +2298,21 @@ fpi_device_report_finger_status (FpDevice           *device,
                                  FpFingerStatusFlags finger_status)
 {
   FpDevicePrivate *priv = fp_device_get_instance_private (device);
-  g_autofree char *status_string = NULL;
 
   if (priv->finger_status == finger_status)
     return FALSE;
 
-  status_string = g_flags_to_string (FP_TYPE_FINGER_STATUS_FLAGS, finger_status);
-  fp_dbg ("Device reported finger status change: %s", status_string);
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *status_string = NULL;
+      g_autofree char *old_status_string = NULL;
+
+      old_status_string = g_flags_to_string (FP_TYPE_FINGER_STATUS_FLAGS, priv->finger_status);
+      status_string = g_flags_to_string (FP_TYPE_FINGER_STATUS_FLAGS, finger_status);
+
+      g_debug ("Device reported finger status change: %s -> %s",
+               old_status_string, status_string);
+    }
 
   priv->finger_status = finger_status;
   g_object_notify (G_OBJECT (device), "finger-status");
@@ -2257,8 +2373,6 @@ fpi_device_update_temp (FpDevice *device, gboolean is_active)
   gdouble next_threshold;
   gdouble old_ratio;
   FpTemperature old_temp;
-  g_autofree char *old_temp_str = NULL;
-  g_autofree char *new_temp_str = NULL;
 
   if (priv->temp_hot_seconds < 0)
     {
@@ -2308,16 +2422,20 @@ fpi_device_update_temp (FpDevice *device, gboolean is_active)
       next_threshold = is_active ? -1.0 : TEMP_HOT_WARM_THRESH;
     }
 
-  old_temp_str = g_enum_to_string (FP_TYPE_TEMPERATURE, old_temp);
-  new_temp_str = g_enum_to_string (FP_TYPE_TEMPERATURE, priv->temp_current);
-  g_debug ("Updated temperature model after %0.2f seconds, ratio %0.2f -> %0.2f, active %d -> %d, %s -> %s",
-           passed_seconds,
-           old_ratio,
-           priv->temp_current_ratio,
-           priv->temp_last_active,
-           is_active,
-           old_temp_str,
-           new_temp_str);
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      g_autofree char *old_temp_str = g_enum_to_string (FP_TYPE_TEMPERATURE, old_temp);
+      g_autofree char *new_temp_str = g_enum_to_string (FP_TYPE_TEMPERATURE, priv->temp_current);
+
+      g_debug ("Updated temperature model after %0.2f seconds, ratio %0.2f -> %0.2f, active %d -> %d, %s -> %s",
+               passed_seconds,
+               old_ratio,
+               priv->temp_current_ratio,
+               priv->temp_last_active,
+               is_active,
+               old_temp_str,
+               new_temp_str);
+    }
 
   if (priv->temp_current != old_temp)
     g_object_notify (G_OBJECT (device), "temperature");

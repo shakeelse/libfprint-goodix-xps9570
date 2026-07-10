@@ -120,10 +120,13 @@ fp_image_device_change_state (FpImageDevice *self, FpiImageDeviceState state)
     { FPI_IMAGE_DEVICE_STATE_DEACTIVATING, FPI_IMAGE_DEVICE_STATE_INACTIVE },
   };
 
-  prev_state_str = g_enum_to_string (FPI_TYPE_IMAGE_DEVICE_STATE, priv->state);
-  state_str = g_enum_to_string (FPI_TYPE_IMAGE_DEVICE_STATE, state);
-  fp_dbg ("Image device internal state change from %s to %s",
-          prev_state_str, state_str);
+  if (!g_log_writer_default_would_drop (G_LOG_LEVEL_DEBUG, G_LOG_DOMAIN))
+    {
+      prev_state_str = g_enum_to_string (FPI_TYPE_IMAGE_DEVICE_STATE, priv->state);
+      state_str = g_enum_to_string (FPI_TYPE_IMAGE_DEVICE_STATE, state);
+      fp_dbg ("Image device internal state change from %s to %s",
+              prev_state_str, state_str);
+    }
 
   for (i = 0; i < G_N_ELEMENTS (valid_transitions); i++)
     {
@@ -134,8 +137,15 @@ fp_image_device_change_state (FpImageDevice *self, FpiImageDeviceState state)
         }
     }
   if (!transition_is_valid)
-    g_warning ("Internal state machine issue: transition from %s to %s should not happen!",
-               prev_state_str, state_str);
+    {
+      if (!prev_state_str)
+        prev_state_str = g_enum_to_string (FPI_TYPE_IMAGE_DEVICE_STATE, priv->state);
+      if (!state_str)
+        state_str = g_enum_to_string (FPI_TYPE_IMAGE_DEVICE_STATE, state);
+
+      g_warning ("Internal state machine issue: transition from %s to %s should not happen!",
+                 prev_state_str, state_str);
+    }
 
   priv->state = state;
   g_object_notify (G_OBJECT (self), "fpi-image-device-state");
