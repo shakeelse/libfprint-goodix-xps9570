@@ -639,7 +639,6 @@ elanmoc_match_report_cb (FpiDeviceElanmoc *self,
 {
   FpDevice *device = FP_DEVICE (self);
   FpPrint *print = NULL;
-  FpPrint *verify_print = NULL;
   GPtrArray *prints;
   gboolean found = FALSE;
   guint index;
@@ -668,31 +667,18 @@ elanmoc_match_report_cb (FpiDeviceElanmoc *self,
 
   fp_info ("Verify/Identify successful for: %s", fp_print_get_description (print));
 
-  if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_IDENTIFY)
-    {
-      fpi_device_get_identify_data (device, &prints);
-      found = g_ptr_array_find_with_equal_func (prints,
-                                                print,
-                                                (GEqualFunc) fp_print_equal,
-                                                &index);
+  fpi_device_get_identify_data (device, &prints);
+  found = g_ptr_array_find_with_equal_func (prints,
+                                            print,
+                                            (GEqualFunc) fp_print_equal,
+                                            &index);
 
-      if (found)
-        fpi_device_identify_report (device, g_ptr_array_index (prints, index), print, NULL);
-      else
-        fpi_device_identify_report (device, NULL, print, NULL);
-
-      fpi_device_identify_complete (device, NULL);
-    }
+  if (found)
+    fpi_device_identify_report (device, g_ptr_array_index (prints, index), print, NULL);
   else
-    {
-      fpi_device_get_verify_data (device, &verify_print);
+    fpi_device_identify_report (device, NULL, print, NULL);
 
-      if (fp_print_equal (verify_print, print))
-        fpi_device_verify_report (device, FPI_MATCH_SUCCESS, print, NULL);
-      else
-        fpi_device_verify_report (device, FPI_MATCH_FAIL, print, NULL);
-      fpi_device_verify_complete (device, NULL);
-    }
+  fpi_device_identify_complete (device, NULL);
 }
 
 static void
@@ -704,10 +690,7 @@ identify_status_report (FpiDeviceElanmoc *self, int verify_status_id,
 
   if (error)
     {
-      if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_VERIFY)
-        fpi_device_verify_complete (device, error);
-      else
-        fpi_device_identify_complete (device, error);
+      fpi_device_identify_complete (device, error);
       return;
     }
 
@@ -717,16 +700,8 @@ identify_status_report (FpiDeviceElanmoc *self, int verify_status_id,
       {
         if (data == ELAN_MSG_VERIFY_ERR)
           {
-            if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_VERIFY)
-              {
-                fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, NULL);
-                fpi_device_verify_complete (device, NULL);
-              }
-            else
-              {
-                fpi_device_identify_report (device, NULL, NULL, NULL);
-                fpi_device_identify_complete (device, NULL);
-              }
+            fpi_device_identify_report (device, NULL, NULL, NULL);
+            fpi_device_identify_complete (device, NULL);
           }
         else
           {
@@ -745,23 +720,15 @@ identify_status_report (FpiDeviceElanmoc *self, int verify_status_id,
                 retry_error = fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL);
               }
 
-            if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_VERIFY)
-              {
-                fpi_device_verify_report (device, FPI_MATCH_ERROR, NULL, retry_error);
-                fpi_device_verify_complete (device, NULL);
-              }
-            else
-              {
-                fpi_device_identify_report (device, NULL, NULL, retry_error);
-                fpi_device_identify_complete (device, NULL);
-              }
+            fpi_device_identify_report (device, NULL, NULL, retry_error);
+            fpi_device_identify_complete (device, NULL);
           }
         break;
       }
 
     case RSP_VERIFY_OK:
       {
-        fp_dbg ("Verify was successful! for user: %d mesg_code: %d ", data, verify_status_id);
+        fp_dbg ("Identify was successful! for user: %d mesg_code: %d ", data, verify_status_id);
         cmd_buf = elanmoc_compose_cmd (&elanmoc_get_userid_cmd);
         cmd_buf[2] = data;
         elanmoc_get_cmd (device, cmd_buf, elanmoc_get_userid_cmd.cmd_len, elanmoc_get_userid_cmd.resp_len, 0, elanmoc_match_report_cb);
@@ -815,7 +782,7 @@ elan_identify_run_state (FpiSsm *ssm, FpDevice *dev)
       break;
 
     case IDENTIFY_WAIT_FINGER:
-      fp_info ("elanmoc %s VERIFY_WAIT_FINGER", __func__);
+      fp_info ("elanmoc %s IDENTIFY_WAIT_FINGER", __func__);
       cmd_buf = elanmoc_compose_cmd (&elanmoc_verify_cmd);
       elanmoc_get_cmd (dev, cmd_buf, elanmoc_verify_cmd.cmd_len, elanmoc_verify_cmd.resp_len, 1, elanmoc_identify_cb);
       break;
@@ -1175,7 +1142,6 @@ fpi_device_elanmoc_class_init (FpiDeviceElanmocClass *klass)
 
   dev_class->open = elanmoc_open;
   dev_class->close = elanmoc_close;
-  dev_class->verify = elanmoc_identify;
   dev_class->enroll = elanmoc_enroll;
   dev_class->identify = elanmoc_identify;
   dev_class->delete = elanmoc_delete_print;

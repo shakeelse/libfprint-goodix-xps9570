@@ -807,16 +807,8 @@ focaltech_moc_identify_capture_cb (FpiDeviceFocaltechMoc *self,
         }
       else
         {
-          if (fpi_device_get_current_action (FP_DEVICE (self)) == FPI_DEVICE_ACTION_VERIFY)
-            {
-              fpi_device_verify_report (FP_DEVICE (self), FPI_MATCH_ERROR, NULL, error);
-              fpi_device_verify_complete (FP_DEVICE (self), NULL);
-            }
-          else
-            {
-              fpi_device_identify_report (FP_DEVICE (self), NULL, NULL, error);
-              fpi_device_identify_complete (FP_DEVICE (self), NULL);
-            }
+          fpi_device_identify_report (FP_DEVICE (self), NULL, NULL, error);
+          fpi_device_identify_complete (FP_DEVICE (self), NULL);
 
           fpi_ssm_mark_failed (self->task_ssm, fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL));
         }
@@ -830,50 +822,27 @@ identify_status_report (FpiDeviceFocaltechMoc *self, FpPrint *print, GError *err
 
   if (print == NULL)
     {
-      if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_IDENTIFY)
-        {
-          fpi_device_identify_report (device, NULL, NULL, NULL);
-          fpi_device_identify_complete (device, NULL);
-        }
-      else
-        {
-          fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, NULL);
-          fpi_device_verify_complete (device, NULL);
-        }
+      fpi_device_identify_report (device, NULL, NULL, NULL);
+      fpi_device_identify_complete (device, NULL);
     }
   else
     {
-      if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_IDENTIFY)
-        {
-          GPtrArray *prints;
-          gboolean found = FALSE;
-          guint index;
+      GPtrArray *prints;
+      gboolean found = FALSE;
+      guint index;
 
-          fpi_device_get_identify_data (device, &prints);
-          found = g_ptr_array_find_with_equal_func (prints,
-                                                    print,
-                                                    (GEqualFunc) fp_print_equal,
-                                                    &index);
+      fpi_device_get_identify_data (device, &prints);
+      found = g_ptr_array_find_with_equal_func (prints,
+                                                print,
+                                                (GEqualFunc) fp_print_equal,
+                                                &index);
 
-          if (found)
-            fpi_device_identify_report (device, g_ptr_array_index (prints, index), print, NULL);
-          else
-            fpi_device_identify_report (device, NULL, print, NULL);
-
-          fpi_device_identify_complete (device, NULL);
-        }
+      if (found)
+        fpi_device_identify_report (device, g_ptr_array_index (prints, index), print, NULL);
       else
-        {
-          FpPrint *verify_print = NULL;
-          fpi_device_get_verify_data (device, &verify_print);
+        fpi_device_identify_report (device, NULL, print, NULL);
 
-          if (fp_print_equal (verify_print, print))
-            fpi_device_verify_report (device, FPI_MATCH_SUCCESS, print, NULL);
-          else
-            fpi_device_verify_report (device, FPI_MATCH_FAIL, print, NULL);
-
-          fpi_device_verify_complete (device, NULL);
-        }
+      fpi_device_identify_complete (device, NULL);
     }
 }
 
@@ -2043,7 +2012,6 @@ fpi_device_focaltech_moc_class_init (FpiDeviceFocaltechMocClass *klass)
   dev_class->probe = focaltech_moc_probe;
   dev_class->open = focaltech_moc_open;
   dev_class->close = focaltech_moc_close;
-  dev_class->verify = focaltech_moc_identify;
   dev_class->enroll = focaltech_moc_enroll;
   dev_class->identify = focaltech_moc_identify;
   dev_class->delete = focaltech_moc_delete_print;

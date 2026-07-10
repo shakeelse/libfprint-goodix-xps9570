@@ -1355,19 +1355,17 @@ fpc_enroll_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
 
 /******************************************************************************
  *
- *  fpc_verify_xxx function
+ *  fpc_identify_xxx function
  *
  *****************************************************************************/
 
 static void
-fpc_verify_cb (FpiDeviceFpcMoc *self,
-               void            *data,
-               GError          *error)
+fpc_identify_cb (FpiDeviceFpcMoc *self,
+                 void            *data,
+                 GError          *error)
 {
   g_autoptr(GPtrArray) templates = NULL;
   FpDevice *device = FP_DEVICE (self);
-  gboolean found = FALSE;
-  FpiDeviceAction current_action;
   FpiByteReader reader;
   gint32 status;
   guint32 identity_type;
@@ -1394,18 +1392,11 @@ fpc_verify_cb (FpiDeviceFpcMoc *self,
       return;
     }
 
-  current_action = fpi_device_get_current_action (device);
-
-  g_assert (current_action == FPI_DEVICE_ACTION_VERIFY ||
-            current_action == FPI_DEVICE_ACTION_IDENTIFY);
-
   if ((status == 0) && (subfactor == FPC_SUBTYPE_RESERVED) &&
       (identity_type == FPC_IDENTITY_TYPE_RESERVED) &&
       (identity_size <= SECURITY_MAX_SID_SIZE))
     {
       FpPrint *match = NULL;
-      FpPrint *print = NULL;
-      gint cnt = 0;
       fpc_fid_data_t fid_data = {0};
 
       fid_data.subfactor = subfactor;
@@ -1421,62 +1412,36 @@ fpc_verify_cb (FpiDeviceFpcMoc *self,
 
       match = fpc_print_from_data (self, &fid_data);
 
-      if (current_action == FPI_DEVICE_ACTION_VERIFY)
-        {
-          templates = g_ptr_array_sized_new (1);
-          fpi_device_get_verify_data (device, &print);
-          g_ptr_array_add (templates, print);
-        }
-      else
-        {
-          fpi_device_get_identify_data (device, &templates);
-          g_ptr_array_ref (templates);
-        }
+      fpi_device_get_identify_data (device, &templates);
+      g_ptr_array_ref (templates);
 
-      for (cnt = 0; cnt < templates->len; cnt++)
-        {
-          print = g_ptr_array_index (templates, cnt);
+      guint matching_index;
 
-          if (fp_print_equal (print, match))
-            {
-              found = TRUE;
-              break;
-            }
-        }
-
-      if (found)
+      if (g_ptr_array_find_with_equal_func (templates, match,
+                                            (GEqualFunc) fp_print_equal, &matching_index))
         {
-          if (current_action == FPI_DEVICE_ACTION_VERIFY)
-            fpi_device_verify_report (device, FPI_MATCH_SUCCESS, match, error);
-          else
-            fpi_device_identify_report (device, print, match, error);
+          FpPrint *print = g_ptr_array_index (templates, matching_index);
+
+          fpi_device_identify_report (device, print, match, error);
 
           fpi_ssm_mark_completed (self->task_ssm);
           return;
         }
     }
 
-  if (!found)
-    {
-      if (current_action == FPI_DEVICE_ACTION_VERIFY)
-        fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, error);
-      else
-        fpi_device_identify_report (device, NULL, NULL, error);
-    }
-
-  /* This is the last state for verify/identify */
+  fpi_device_identify_report (device, NULL, NULL, error);
   fpi_ssm_mark_completed (self->task_ssm);
 }
 
 static void
-fpc_verify_sm_run_state (FpiSsm *ssm, FpDevice *device)
+fpc_identify_sm_run_state (FpiSsm *ssm, FpDevice *device)
 {
   FpiDeviceFpcMoc *self = FPI_DEVICE_FPCMOC (device);
   CommandData cmd_data = {0};
 
   switch (fpi_ssm_get_cur_state (ssm))
     {
-    case FPC_VERIFY_CAPTURE:
+    case FPC_IDENTIFY_CAPTURE:
       {
         guint8 buf[4];
         FpiByteWriter writer;
@@ -1499,7 +1464,7 @@ fpc_verify_sm_run_state (FpiSsm *ssm, FpDevice *device)
       }
       break;
 
-    case FPC_VERIFY_GET_IMG:
+    case FPC_IDENTIFY_GET_IMG:
       {
         cmd_data.cmdtype = FPC_CMDTYPE_TO_DEVICE_EVTDATA;
         cmd_data.request = FPC_CMD_GET_IMG;
@@ -1513,7 +1478,7 @@ fpc_verify_sm_run_state (FpiSsm *ssm, FpDevice *device)
       }
       break;
 
-    case FPC_VERIFY_IDENTIFY:
+    case FPC_IDENTIFY_IDENTIFY:
       {
         gsize recv_data_len = sizeof (FPC_IDENTIFY);
         cmd_data.cmdtype = FPC_CMDTYPE_FROM_DEVICE;
@@ -1522,13 +1487,13 @@ fpc_verify_sm_run_state (FpiSsm *ssm, FpDevice *device)
         cmd_data.index = 0x0;
         cmd_data.data = NULL;
         cmd_data.data_len = recv_data_len;
-        cmd_data.callback = fpc_verify_cb;
+        cmd_data.callback = fpc_identify_cb;
 
         fpc_sensor_cmd (self, FALSE, &cmd_data);
       }
       break;
 
-    case FPC_VERIFY_CANCEL:
+    case FPC_IDENTIFY_CANCEL:
       {
         cmd_data.cmdtype = FPC_CMDTYPE_TO_DEVICE;
         cmd_data.request = FPC_CMD_ABORT;
@@ -1545,24 +1510,16 @@ fpc_verify_sm_run_state (FpiSsm *ssm, FpDevice *device)
 }
 
 static void
-fpc_verify_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
+fpc_identify_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
 {
   FpiDeviceFpcMoc *self = FPI_DEVICE_FPCMOC (dev);
 
   fp_info ("Verify_identify complete!");
 
   if (error && error->domain == FP_DEVICE_RETRY)
-    {
-      if (fpi_device_get_current_action (dev) == FPI_DEVICE_ACTION_VERIFY)
-        fpi_device_verify_report (dev, FPI_MATCH_ERROR, NULL, g_steal_pointer (&error));
-      else
-        fpi_device_identify_report (dev, NULL, NULL, g_steal_pointer (&error));
-    }
+    fpi_device_identify_report (dev, NULL, NULL, g_steal_pointer (&error));
 
-  if (fpi_device_get_current_action (dev) == FPI_DEVICE_ACTION_VERIFY)
-    fpi_device_verify_complete (dev, g_steal_pointer (&error));
-  else
-    fpi_device_identify_complete (dev, g_steal_pointer (&error));
+  fpi_device_identify_complete (dev, g_steal_pointer (&error));
 
   self->task_ssm = NULL;
 }
@@ -1920,17 +1877,17 @@ fpc_dev_close (FpDevice *device)
 }
 
 static void
-fpc_dev_verify_identify (FpDevice *device)
+fpc_dev_identify (FpDevice *device)
 {
   FpiDeviceFpcMoc *self = FPI_DEVICE_FPCMOC (device);
 
   fp_dbg ("%s enter -->", G_STRFUNC);
-  self->task_ssm = fpi_ssm_new_full (device, fpc_verify_sm_run_state,
-                                     FPC_VERIFY_NUM_STATES,
-                                     FPC_VERIFY_CANCEL,
-                                     "verify_identify");
+  self->task_ssm = fpi_ssm_new_full (device, fpc_identify_sm_run_state,
+                                     FPC_IDENTIFY_NUM_STATES,
+                                     FPC_IDENTIFY_CANCEL,
+                                     "identify");
 
-  fpi_ssm_start (self->task_ssm, fpc_verify_ssm_done);
+  fpi_ssm_start (self->task_ssm, fpc_identify_ssm_done);
 }
 
 static void
@@ -1986,7 +1943,7 @@ fpc_dev_suspend (FpDevice *device)
 
   fp_dbg ("%s enter -->", G_STRFUNC);
 
-  if (action != FPI_DEVICE_ACTION_VERIFY && action != FPI_DEVICE_ACTION_IDENTIFY)
+  if (action != FPI_DEVICE_ACTION_IDENTIFY)
     {
       fpi_device_suspend_complete (device, fpi_device_error_new (FP_DEVICE_ERROR_NOT_SUPPORTED));
       return;
@@ -2006,7 +1963,7 @@ fpc_dev_resume (FpDevice *device)
 
   fp_dbg ("%s enter -->", G_STRFUNC);
 
-  if (action != FPI_DEVICE_ACTION_VERIFY && action != FPI_DEVICE_ACTION_IDENTIFY)
+  if (action != FPI_DEVICE_ACTION_IDENTIFY)
     {
       g_assert_not_reached ();
       fpi_device_resume_complete (device, fpi_device_error_new (FP_DEVICE_ERROR_NOT_SUPPORTED));
@@ -2118,8 +2075,7 @@ fpi_device_fpcmoc_class_init (FpiDeviceFpcMocClass *klass)
   dev_class->enroll =           fpc_dev_enroll;
   dev_class->delete =           fpc_dev_template_delete;
   dev_class->list   =           fpc_dev_template_list;
-  dev_class->verify   =         fpc_dev_verify_identify;
-  dev_class->identify =         fpc_dev_verify_identify;
+  dev_class->identify =         fpc_dev_identify;
   dev_class->suspend =          fpc_dev_suspend;
   dev_class->resume =           fpc_dev_resume;
   dev_class->clear_storage =    fpc_dev_clear_storage;

@@ -951,7 +951,7 @@ egis_etu905_enroll_begin_cb (FpDevice *device,
 /*
  * Builds the full "check" payload which includes identifiers for all
  * fingerprints which currently should exist on the storage. This payload is
- * used during both enrollment and verify actions.
+ * used during both enrollment and identify actions.
  */
 static guchar *
 egis_etu905_get_check_cmd (FpDevice *device,
@@ -1184,7 +1184,6 @@ egis_etu905_identify_check_cb (FpDevice *device,
   FpiDeviceEgisEtu905 *self = FPI_DEVICE_EGIS_ETU905 (device);
   guint8 device_print_id[EGIS_ETU905_FINGERPRINT_DATA_SIZE];
   FpPrint *print = NULL;
-  FpPrint *verify_print = NULL;
   GPtrArray *prints;
   gboolean found = FALSE;
   guint index;
@@ -1260,29 +1259,16 @@ egis_etu905_identify_check_cb (FpDevice *device,
 
       fp_info ("Identify successful for: %s", fp_print_get_description (print));
 
-      if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_IDENTIFY)
-        {
-          fpi_device_get_identify_data (device, &prints);
-          found = g_ptr_array_find_with_equal_func (prints,
-                                                    print,
-                                                    (GEqualFunc) fp_print_equal,
-                                                    &index);
+      fpi_device_get_identify_data (device, &prints);
+      found = g_ptr_array_find_with_equal_func (prints,
+                                                print,
+                                                (GEqualFunc) fp_print_equal,
+                                                &index);
 
-          if (found)
-            fpi_device_identify_report (device, g_ptr_array_index (prints, index), print, NULL);
-          else
-            fpi_device_identify_report (device, NULL, print, NULL);
-        }
+      if (found)
+        fpi_device_identify_report (device, g_ptr_array_index (prints, index), print, NULL);
       else
-        {
-          fpi_device_get_verify_data (device, &verify_print);
-          fp_info ("Verifying against: %s", fp_print_get_description (verify_print));
-
-          if (fp_print_equal (verify_print, print))
-            fpi_device_verify_report (device, FPI_MATCH_SUCCESS, print, NULL);
-          else
-            fpi_device_verify_report (device, FPI_MATCH_FAIL, print, NULL);
-        }
+        fpi_device_identify_report (device, NULL, print, NULL);
     }
   /* If device was successfully read but it was a "not matched" */
   else if (egis_etu905_validate_response_suffix (buffer_in,
@@ -1292,10 +1278,7 @@ egis_etu905_identify_check_cb (FpDevice *device,
     {
       fp_info ("Print was not identified by the device");
 
-      if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_VERIFY)
-        fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, NULL);
-      else
-        fpi_device_identify_report (device, NULL, NULL, NULL);
+      fpi_device_identify_report (device, NULL, NULL, NULL);
     }
   else
     {
@@ -1367,17 +1350,14 @@ egis_etu905_identify_run_state (FpiSsm   *ssm,
     /*
      * In Windows, the driver seems at this point to then immediately take
      * another read from the sensor; this is suspected to be an on-chip
-     * "verify". However, because the user's finger is still on the sensor from
+     * "identify". However, because the user's finger is still on the sensor from
      * the identify, then it seems to always return positive. We will consider
      * this extra step unnecessary and just skip it in this driver. This driver
      * will instead handle matching of the FpPrint from the gallery in the
-     * "verify" case of the callback egis_etu905_identify_check_cb.
+     * callback egis_etu905_identify_check_cb.
      */
     case IDENTIFY_COMPLETE:
-      if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_IDENTIFY)
-        fpi_device_identify_complete (device, NULL);
-      else
-        fpi_device_verify_complete (device, NULL);
+      fpi_device_identify_complete (device, NULL);
 
       fpi_ssm_mark_completed (ssm);
       break;
@@ -1385,9 +1365,9 @@ egis_etu905_identify_run_state (FpiSsm   *ssm,
 }
 
 static void
-egis_etu905_identify_verify (FpDevice *device)
+egis_etu905_identify (FpDevice *device)
 {
-  fp_dbg ("Identify or Verify");
+  fp_dbg ("Identify");
   FpiDeviceEgisEtu905 *self = FPI_DEVICE_EGIS_ETU905 (device);
 
   g_assert (self->task_ssm == NULL);
@@ -1656,8 +1636,7 @@ fpi_device_egis_etu905_class_init (FpiDeviceEgisEtu905Class *klass)
   dev_class->probe = egis_etu905_probe;
   dev_class->open = egis_etu905_open;
   dev_class->close = egis_etu905_close;
-  dev_class->identify = egis_etu905_identify_verify;
-  dev_class->verify = egis_etu905_identify_verify;
+  dev_class->identify = egis_etu905_identify;
   dev_class->enroll = egis_etu905_enroll;
   dev_class->delete = egis_etu905_delete;
   dev_class->clear_storage = egis_etu905_clear_storage;
