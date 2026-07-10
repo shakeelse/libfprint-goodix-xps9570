@@ -127,7 +127,7 @@ fpi_device_class_auto_initialize_features (FpDeviceClass *device_class)
     device_class->features |= FP_DEVICE_FEATURE_VERIFY;
 
   if (device_class->identify)
-    device_class->features |= FP_DEVICE_FEATURE_IDENTIFY;
+    device_class->features |= FP_DEVICE_FEATURE_IDENTIFY | FP_DEVICE_FEATURE_VERIFY;
 
   if (device_class->list)
     device_class->features |= FP_DEVICE_FEATURE_STORAGE_LIST;

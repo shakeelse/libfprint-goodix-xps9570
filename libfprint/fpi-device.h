@@ -107,7 +107,8 @@ struct _FpIdEntry
  *   guaranteed to only happen when the device is open (this includes delete).
  * @close: Close the device again
  * @enroll: Start an enroll operation
- * @verify: Start a verify operation
+ * @verify: Start a verify operation (it will be implemented via @identify
+ *   if not overriden).
  * @identify: Start an identify operation
  * @capture: Start a capture operation
  * @list: List prints stored on the device
