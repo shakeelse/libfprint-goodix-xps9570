@@ -89,7 +89,6 @@ fp_image_device_cancel_action (FpDevice *device)
   /* We can only cancel capture operations, in that case, deactivate and return
    * an error immediately. */
   if (action == FPI_DEVICE_ACTION_ENROLL ||
-      action == FPI_DEVICE_ACTION_VERIFY ||
       action == FPI_DEVICE_ACTION_IDENTIFY ||
       action == FPI_DEVICE_ACTION_CAPTURE)
     fpi_image_device_deactivate (self, TRUE);
@@ -217,7 +216,6 @@ fp_image_device_class_init (FpImageDeviceClass *klass)
   fp_device_class->open = fp_image_device_open;
   fp_device_class->close = fp_image_device_close;
   fp_device_class->enroll = fp_image_device_start_capture_action;
-  fp_device_class->verify = fp_image_device_start_capture_action;
   fp_device_class->identify = fp_image_device_start_capture_action;
   fp_device_class->capture = fp_image_device_start_capture_action;
 
