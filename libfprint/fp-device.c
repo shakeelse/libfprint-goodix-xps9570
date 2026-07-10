@@ -1444,7 +1444,6 @@ fp_device_identify (FpDevice           *device,
   FpDevicePrivate *priv = fp_device_get_instance_private (device);
   FpDeviceClass *cls = FP_DEVICE_GET_CLASS (device);
   FpMatchData *data;
-  int i;
 
   task = g_task_new (device, cancellable, callback, user_data);
   if (g_task_return_error_if_cancelled (task))
@@ -1497,9 +1496,9 @@ fp_device_identify (FpDevice           *device,
    * a reference to each print. Also, the caller could in principle modify the
    * GPtrArray afterwards.
    */
-  data->gallery = g_ptr_array_new_full (prints->len, g_object_unref);
-  for (i = 0; i < prints->len; i++)
-    g_ptr_array_add (data->gallery, g_object_ref (g_ptr_array_index (prints, i)));
+  data->gallery = g_ptr_array_copy (prints, (GCopyFunc) g_object_ref, NULL);
+  g_ptr_array_set_free_func (data->gallery, g_object_unref);
+
   data->match_cb = match_cb;
   data->match_data = match_data;
   data->match_destroy = match_destroy;
