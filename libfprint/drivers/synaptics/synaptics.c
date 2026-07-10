@@ -1479,7 +1479,7 @@ suspend (FpDevice *dev)
   self->cmd_suspended = TRUE;
 
   /* Cancel the current transfer.
-   * The CMD SSM will go into the suspend state and signal readyness. */
+   * The CMD SSM will go into the suspend state and signal readiness. */
   g_cancellable_cancel (self->interrupt_cancellable);
   g_clear_object (&self->interrupt_cancellable);
   self->interrupt_cancellable = g_cancellable_new ();
