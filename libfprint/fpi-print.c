@@ -80,6 +80,22 @@ fpi_print_set_type (FpPrint     *print,
 }
 
 /**
+ * fpi_print_get_type:
+ * @print: A #FpPrint
+ *
+ * Retrieves the type of the print data.
+ *
+ * Returns: The #FpiPrintType of the print.
+ */
+FpiPrintType
+fpi_print_get_type (FpPrint *print)
+{
+  g_return_val_if_fail (FP_IS_PRINT (print), FPI_PRINT_UNDEFINED);
+
+  return print->type;
+}
+
+/**
  * fpi_print_set_device_stored:
  * @print: A #FpPrint
  * @device_stored: Whether the print is stored on the device or not
