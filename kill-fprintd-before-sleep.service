@@ -1,0 +1,10 @@
+[Unit]
+Description=Kill fprintd before sleep
+Before=sleep.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl kill fprintd.service
+
+[Install]
+WantedBy=sleep.target
